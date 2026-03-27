@@ -3,7 +3,7 @@ import { View, StyleSheet, Platform } from 'react-native';
 import Svg, { Path, Circle } from 'react-native-svg';
 import { Colors, Fonts } from '@/constants/theme';
 
-// ─── Tab Icons (clean line icons) ────────────────────────────────
+// ─── Tab Icons─────────────────────────
 function IconHome({ color, size = 22 }: { color: string; size?: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
@@ -43,6 +43,27 @@ function IconProfile({ color, size = 22 }: { color: string; size?: number }) {
   );
 }
 
+// ─── AI Tab — raised circle button in the centre ──────────────────
+function IconAI({ focused }: { focused: boolean }) {
+  return (
+    <View style={[styles.aiBtn, focused && styles.aiBtnActive]}>
+      <View style={styles.aiGlow} />
+      <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+        {/* Sparkle / wand icon */}
+        <Path d="M15 4V2" />
+        <Path d="M15 16v-2" />
+        <Path d="M8 9H6" />
+        <Path d="M20 9h-2" />
+        <Path d="M17.8 11.8L19 13" />
+        <Path d="M15 9h0" />
+        <Path d="M17.8 6.2L19 5" />
+        <Path d="M3 21l9-9" />
+        <Path d="M12.2 6.2L11 5" />
+      </Svg>
+    </View>
+  );
+}
+
 export default function TabLayout() {
   return (
     <Tabs
@@ -68,6 +89,18 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <IconDiscover color={color} />,
         }}
       />
+
+      {/* ── Centre AI button ── */}
+      <Tabs.Screen
+        name="ai-chat"
+        options={{
+          title: '',
+          tabBarIcon: ({ focused }) => <IconAI focused={focused} />,
+          // Hide the label — the button speaks for itself
+          tabBarLabel: () => null,
+        }}
+      />
+
       <Tabs.Screen
         name="salons"
         options={{
@@ -101,5 +134,32 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.bodyMedium,
     fontSize: 10,
     marginTop: 2,
+  },
+
+  // Raised circular AI button — sits above the tab bar
+  aiBtn: {
+    width: 52, height: 52,
+    borderRadius: 26,
+    backgroundColor: Colors.violet,
+    alignItems: 'center', justifyContent: 'center',
+    marginBottom: Platform.OS === 'ios' ? 12 : 8,
+    shadowColor: Colors.violet,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.45,
+    shadowRadius: 14,
+    elevation: 8,
+    overflow: 'visible',
+  },
+  aiBtnActive: {
+    backgroundColor: Colors.ink,
+    shadowColor: Colors.pink,
+    shadowOpacity: 0.55,
+  },
+  // Subtle glow ring
+  aiGlow: {
+    position: 'absolute',
+    width: 60, height: 60, borderRadius: 30,
+    borderWidth: 1.5,
+    borderColor: 'rgba(118,67,172,0.25)',
   },
 });

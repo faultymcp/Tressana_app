@@ -15,7 +15,7 @@ import { Colors, Fonts, Radius } from '@/constants/theme';
 import Animated, { FadeInUp, FadeInLeft, FadeInRight } from 'react-native-reanimated';
 
 // ── Groq API ──────────────────
-const GROQ_KEY = process.env.EXPO_PUBLIC_GROQ_KEY ?? "" ;
+const GROQ_KEY = process.env.EXPO_PUBLIC_GROQ_KEY || '';
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const OPEN_FOOD_FACTS_URL = 'https://world.openfoodfacts.org/api/v0/product';
 

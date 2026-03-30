@@ -14,7 +14,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Colors, Fonts, Radius } from '@/constants/theme';
 import Animated, { FadeInUp, FadeInLeft, FadeInRight } from 'react-native-reanimated';
 
-// ── Groq API ──────────────────
+// ── Groq API ─────────────────
 const GROQ_KEY = process.env.EXPO_PUBLIC_GROQ_KEY || '';
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const OPEN_FOOD_FACTS_URL = 'https://world.openfoodfacts.org/api/v0/product';
@@ -283,7 +283,7 @@ function AttachMenu({ onIngredientScan, onBarcodeScan, onDocument }: { onIngredi
 export default function AIChatScreen() {
   const [messages, setMessages] = useState<Message[]>([{
     id: 'welcome', role: 'assistant',
-    text: "Heyy! 👋 I'm **Tressie**, your hair big sis inside Tressana.\n\nReal talk — I've done the research, tried the products, and made the mistakes so you don't have to. I got you.\n\nSo what's going on with your hair? 👀",
+    text: "Heyy! 👋 I'm **Tressie**, your hair assistant inside Tressana.\n\nReal talk — I've done the research, tried the products, and made the mistakes so you don't have to. I got you.\n\nSo what's going on with your hair? 👀",
   }]);
   const [history, setHistory] = useState<GroqMessage[]>([]);
   const [input, setInput] = useState('');
@@ -473,7 +473,7 @@ export default function AIChatScreen() {
         onScanned={handleBarcodeScanned}
       />
 
-      <KeyboardAvoidingView style={st.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}>
+      <KeyboardAvoidingView style={st.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <Pressable style={st.flex} onPress={() => setShowAttachMenu(false)}>
           <FlatList
             ref={listRef}
@@ -482,6 +482,11 @@ export default function AIChatScreen() {
             contentContainerStyle={st.list}
             showsVerticalScrollIndicator={true}
             scrollIndicatorInsets={{ right: 1 }}
+            scrollEnabled={true}
+            bounces={true}
+            alwaysBounceVertical={true}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
             onContentSizeChange={scrollToBottom}
             renderItem={({ item, index }) => {
               if (item.role === 'typing') return <TypingDots />;
@@ -605,7 +610,13 @@ const st = StyleSheet.create({
   attachSub: { fontFamily: Fonts.body, fontSize: 12, color: Colors.muted, marginTop: 1 },
   attachDivider: { height: 1, backgroundColor: Colors.border, marginLeft: 70 },
 
-  inputWrap: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: Platform.OS === 'ios' ? 8 : 14, borderTopWidth: 1, borderTopColor: Colors.border, backgroundColor: Colors.porcelain },
+  inputWrap: {
+    paddingHorizontal: 16, paddingTop: 10,
+    paddingBottom: Platform.OS === 'ios' ? 24 : 14,
+    borderTopWidth: 1, borderTopColor: Colors.border,
+    backgroundColor: Colors.porcelain,
+    position: 'relative',
+  },
   inputRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, backgroundColor: Colors.white, borderWidth: 1.5, borderColor: Colors.border, borderRadius: Radius.lg, paddingLeft: 6, paddingRight: 6, paddingVertical: 6 },
   inputRowFocused: { borderColor: Colors.violet },
   plusBtn: { flexShrink: 0 },

@@ -22,14 +22,14 @@ const OPEN_FOOD_FACTS_URL = 'https://world.openfoodfacts.org/api/v0/product';
 // ── Tressie System Prompt ─────────────────────────────────────────
 const SYSTEM_PROMPT = `You are Tressie, the AI hair advisor exclusively inside the Tressana app. You ONLY talk about hair. Nothing else.
 
-YOUR PERSONALITY - older sister energy:
+YOUR PERSONALITY — older sister energy:
 - Talk like a real person, not a customer service bot. Casual, warm, direct.
 - Say things like "okay so here's the thing...", "sis listen", "real talk", "no cap this actually works", "I've been there"
 - Validate feelings FIRST before giving advice
 - Use community terms: wash day, protective styles, shrinkage, LOC method, porosity, big chop, transitioning, co-wash, pre-poo
 - Keep answers concise unless they ask for a full routine
 
-YOUR NAME IS TRESSIE. You are not "an AI" - you're Tressie, their hair big sis.
+YOUR NAME IS TRESSIE. You are not "an AI" — you're Tressie, their hair big sis.
 
 HAIR TYPES (Andre Walker System):
 - Type 1 (Straight): 1A fine, 1B medium, 1C coarse
@@ -52,7 +52,7 @@ COMMON CONCERNS:
 - Shrinkage (Type 4): Normal — banding, blow out, braids to stretch
 - Buildup: Clarifying shampoo, apple cider vinegar rinse
 
-INGREDIENT ANALYSIS - when given ingredients:
+INGREDIENT ANALYSIS — when given ingredients:
 - Sulfates (SLS, SLES): drying, avoid for curly/coily
 - Silicones (dimethicone): buildup if non-water-soluble
 - Proteins (keratin, hydrolysed silk): good in balance
@@ -283,7 +283,7 @@ function AttachMenu({ onIngredientScan, onBarcodeScan, onDocument }: { onIngredi
 export default function AIChatScreen() {
   const [messages, setMessages] = useState<Message[]>([{
     id: 'welcome', role: 'assistant',
-    text: "Heyy! 👋 I'm **Tressie**, your hair assistant inside Tressana.\n\nReal talk - I've done the research, tried the products, and made the mistakes so you don't have to. I got you.\n\nSo what's going on with your hair? 👀",
+    text: "Heyy! 👋 I'm **Tressie**, your hair big sis inside Tressana.\n\nReal talk — I've done the research, tried the products, and made the mistakes so you don't have to. I got you.\n\nSo what's going on with your hair? 👀",
   }]);
   const [history, setHistory] = useState<GroqMessage[]>([]);
   const [input, setInput] = useState('');
@@ -354,14 +354,44 @@ export default function AIChatScreen() {
 
   // ── Ingredient scan ─────────────────────────────────────────────
   const handleIngredientScan = useCallback(async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') { Alert.alert('Permission needed', 'Please allow photo access.'); return; }
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 });
-    if (result.canceled) return;
-    setShowAttachMenu(false);
-    sendMessage(
-      "I've uploaded a photo of a hair product ingredient list. Please analyse these ingredients for my hair type and tell me if this product is suitable, what ingredients are good, which to watch out for, and why.",
-      { type: 'image', name: 'Ingredient Label' }
+    Alert.alert(
+      'Scan Ingredients',
+      'How would you like to capture the ingredient label?',
+      [
+        {
+          text: '📷 Take a Photo',
+          onPress: async () => {
+            const { status } = await ImagePicker.requestCameraPermissionsAsync();
+            if (status !== 'granted') { Alert.alert('Permission needed', 'Please allow camera access.'); return; }
+            const result = await ImagePicker.launchCameraAsync({
+              mediaTypes: ['images'],
+              allowsEditing: true,
+              quality: 0.8,
+            });
+            if (result.canceled) return;
+            setShowAttachMenu(false);
+            sendMessage(
+              "I've taken a photo of a hair product ingredient list. Please analyse these ingredients for my hair type — tell me what's good, what to watch out for, and whether this product is suitable for me.",
+              { type: 'image', name: 'Ingredient Photo' }
+            );
+          },
+        },
+        {
+          text: '🖼️ Choose from Gallery',
+          onPress: async () => {
+            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (status !== 'granted') { Alert.alert('Permission needed', 'Please allow photo access.'); return; }
+            const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 });
+            if (result.canceled) return;
+            setShowAttachMenu(false);
+            sendMessage(
+              "I've uploaded a photo of a hair product ingredient list. Please analyse these ingredients for my hair type — tell me what's good, what to watch out for, and whether this product is suitable for me.",
+              { type: 'image', name: 'Ingredient Label' }
+            );
+          },
+        },
+        { text: 'Cancel', style: 'cancel' },
+      ]
     );
   }, [sendMessage]);
 
@@ -450,7 +480,8 @@ export default function AIChatScreen() {
             data={listData}
             keyExtractor={item => item.id}
             contentContainerStyle={st.list}
-            showsVerticalScrollIndicator={false}
+            showsVerticalScrollIndicator={true}
+            scrollIndicatorInsets={{ right: 1 }}
             onContentSizeChange={scrollToBottom}
             renderItem={({ item, index }) => {
               if (item.role === 'typing') return <TypingDots />;

@@ -37,6 +37,7 @@ tressana-mobile/
 │   ├── reveal.tsx          # Profile reveal
 │   └── (tabs)/             # Bottom tab navigation
 │       ├── _layout.tsx     # Tab bar config
+        ├── ai_chat.tsx     # Tressie AI chat screen
 │       ├── home.tsx        # Dashboard + routine tracker
 │       ├── discover.tsx    # Hairstyle gallery
 │       ├── salons.tsx      # Salon finder
@@ -60,6 +61,7 @@ tressana-mobile/
 Splash → Onboarding (3 slides) → Auth → Quiz (7 steps) → Profile Reveal → Home (tabs)
                                                                               ├── Home (dashboard)
                                                                               ├── Discover (gallery)
+                                                                              ├── Tressie AI chat screen
                                                                               ├── Salons
                                                                               └── Profile
 ```
@@ -76,6 +78,7 @@ All colours, fonts, and spacing are in `constants/theme.ts`:
 
 ## What's Connected
 
+- **Groq Key** — Tressie AI (LLaMA 3.3 70B via Groq)
 - **Supabase Auth** — email/password + Google OAuth
 - **Supabase Database** — hair profiles, hairstyles
 - **Cloudflare R2** — hairstyle images (via image_url in database)

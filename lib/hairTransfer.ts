@@ -1,67 +1,29 @@
 /**
- * Tressana Hair Transfer Pipeline - Fast & Cheap (Flux Schnell)
+ * Tressana Hair Transfer Pipeline - Simplified Version
  *
- * Step 1: LLaVA → describes reference hairstyle
- * Step 2: Flux Schnell → fast generation with strict copy prompt
+ * Direct transfer using Nano Banana Pro (selfie + reference image)
+ * No separate description step needed
  */
 
 const REPLICATE_TOKEN = process.env.EXPO_PUBLIC_REPLICATE_TOKEN || '';
 
-// ─── Step 1: Describe hairstyle using LLaVA ────────────────────────
-async function describeHairstyle(base64Image: string): Promise<string> {
-  if (!REPLICATE_TOKEN) throw new Error('Replicate token missing in .env');
-
-  const response = await fetch('https://api.replicate.com/v1/predictions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${REPLICATE_TOKEN}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      version: 'yorickvp/llava-13b:80537f9eead1a5bfa72d5ac6ea6414379be41d4d4f6679fd776e9535d1eb58bb',
-      input: {
-        image: `data:image/jpeg;base64,${base64Image}`,
-        prompt: `Describe ONLY the hairstyle in this image in one detailed sentence. 
-Include: hair length (short/medium/long), texture (straight/wavy/curly/coily), color, 
-volume, parting, and any distinctive features like bangs, layers, braids, highlights, 
-or curls. Do NOT describe the person's face, skin, clothes, background, or anything else. 
-Be very precise and detailed.`,
-        max_tokens: 150,
-      },
-    }),
-  });
-
-  if (!response.ok) throw new Error('Failed to analyse reference image');
-
-  const prediction = await response.json();
-  let result: string | undefined;
-
-  for (let i = 0; i < 40; i++) {
-    const poll = await fetch(prediction.urls.get, {
-      headers: { Authorization: `Bearer ${REPLICATE_TOKEN}` },
-    });
-    const data = await poll.json();
-
-    if (data.status === 'succeeded') {
-      result = Array.isArray(data.output) ? data.output.join(' ').trim() : data.output?.trim();
-      break;
-    }
-    await new Promise(r => setTimeout(r, 2500));
+// ─── Main Hair Transfer Function ─────────────────────────────────────
+export async function transferHairstyle(
+  selfieBase64: string,
+  referenceBase64: string,
+  onProgress?: (status: string) => void,
+): Promise<string> {
+  if (!REPLICATE_TOKEN) {
+    throw new Error('Replicate token not set. Add EXPO_PUBLIC_REPLICATE_TOKEN to .env');
   }
 
-  if (!result) throw new Error('Description timed out');
-  return result;
-}
+  onProgress?.('Transferring hairstyle...');
 
-// ─── Step 2: Generate with Flux Schnell (fast + strict copy) ────────────────
-async function generateWithFlux(base64Selfie: string, hairstyleDescription: string): Promise<string> {
-  if (!REPLICATE_TOKEN) throw new Error('Replicate token missing');
-
-  const prompt = `Strictly and literally transfer the hairstyle from the reference exactly as described: ${hairstyleDescription}. 
-Copy EVERY single detail: exact length, curl pattern/texture, color, volume, parting, bangs/layers/braids — do NOT smooth, wave, straighten, shorten, lengthen, or change anything about the hair. 
-Do NOT add or invent any new hair features. 
-Keep the face, eyes, skin tone, expression, clothing, pose, lighting, and background 100% unchanged. 
-Photorealistic hairstyle copy only — no AI stylization.`;
+  const prompt = `Transfer the exact hairstyle from the reference image to the person in the main photo. 
+Match the color, texture, length, volume, parting, and all details perfectly. 
+Do not change or reinterpret the hair. 
+Keep the person's face, skin tone, expression, clothing, pose, lighting, and background completely unchanged. 
+Make it look photorealistic and natural.`;
 
   let createRes;
   let attempts = 0;
@@ -76,12 +38,14 @@ Photorealistic hairstyle copy only — no AI stylization.`;
         'Prefer': 'wait',
       },
       body: JSON.stringify({
-        version: 'black-forest-labs/flux-schnell',
+        version: 'google/nano-banana-pro',
         input: {
-          prompt,
-          input_image: `data:image/jpeg;base64,${base64Selfie}`,
-          guidance_scale: 1.0,      // low = more literal / less creative interpretation
-          aspect_ratio: '1:1',
+          prompt: prompt,
+          image_input: [
+            `data:image/jpeg;base64,${selfieBase64}`,     // Main image (selfie)
+            `data:image/jpeg;base64,${referenceBase64}`,  // Reference hairstyle
+          ],
+          output_format: 'png',
         },
       }),
     });
@@ -95,15 +59,15 @@ Photorealistic hairstyle copy only — no AI stylization.`;
 
     if (!createRes.ok) {
       const err = await createRes.json().catch(() => ({}));
-      console.error('Flux error:', createRes.status, err);
-      throw new Error(`Flux failed: ${createRes.status}`);
+      console.error('Nano Banana Pro error:', createRes.status, err);
+      throw new Error(`Generation failed: ${createRes.status}`);
     }
 
     break;
   }
 
   if (attempts >= maxAttempts) {
-    throw new Error('Rate limit retries exhausted. Add credit or wait longer.');
+    throw new Error('Rate limit retries exhausted. Add more credit to Replicate or wait.');
   }
 
   const prediction = await createRes.json();
@@ -116,7 +80,7 @@ Photorealistic hairstyle copy only — no AI stylization.`;
     return await pollReplicate(prediction.urls.get);
   }
 
-  throw new Error('Unexpected Flux response');
+  throw new Error('Unexpected response from Nano Banana Pro');
 }
 
 // ─── Poll Replicate ──────────────────────────────────────────────
@@ -146,26 +110,4 @@ async function pollReplicate(getUrl: string): Promise<string> {
   }
 
   throw new Error('Generation timed out');
-}
-
-// ─── Main export ─────────────────────────────────────────────────
-export async function transferHairstyle(
-  selfieBase64: string,
-  referenceBase64: string,
-  onProgress?: (status: string) => void,
-): Promise<string> {
-  try {
-    onProgress?.('Analyzing reference hairstyle...');
-    const description = await describeHairstyle(referenceBase64);
-    console.log('Description:', description);
-
-    onProgress?.('Generating new look (Flux Schnell)...');
-    const resultUrl = await generateWithFlux(selfieBase64, description);
-
-    onProgress?.('Done!');
-    return resultUrl;
-  } catch (error: any) {
-    console.error('Hair transfer error:', error);
-    throw new Error(error.message || 'Hair transfer failed. Please try again.');
-  }
 }

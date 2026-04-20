@@ -1,35 +1,33 @@
-import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Platform } from 'react-native';
+import { useState, useEffect, useCallback } from 'react';
+import {
+  View, Text, StyleSheet, ScrollView, Pressable, Platform,
+  RefreshControl, ActivityIndicator,
+} from 'react-native';
 import { useRouter } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Path } from 'react-native-svg';
+import { useFocusEffect } from '@react-navigation/native';
+import Svg, { Path, Circle, Rect, Line } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors, Fonts, Radius } from '@/constants/theme';
 import { supabase } from '@/lib/supabase';
 import Animated, { FadeInUp } from 'react-native-reanimated';
 
-// ─── Curl Pattern SVG ────────────────────────────────────────────
-function CurlPattern({ type, size = 70, color }: { type: string; size?: number; color?: string }) {
-  const cx = 25; let d = '', sw = 2.2; const stroke = color || Colors.violet;
-  if (type === '1' || type === '1A') { d = `M${cx} 2 L${cx} 68`; sw = 2; }
-  else if (type === '1B') { d = `M${cx} 2 Q${cx+3} 20, ${cx} 35 Q${cx-3} 50, ${cx} 68`; }
-  else if (type === '1C') { d = `M${cx} 2 L${cx} 68`; sw = 3.2; }
-  else if (type === '2' || type === '2A') { d = `M${cx} 2 Q${cx+10} 14, ${cx} 24 Q${cx-10} 34, ${cx} 44 Q${cx+8} 54, ${cx} 68`; sw = 2; }
-  else if (type === '2B') { d = `M${cx} 2 Q${cx+12} 10, ${cx} 18 Q${cx-12} 26, ${cx} 34 Q${cx+12} 42, ${cx} 50 Q${cx-12} 58, ${cx} 68`; }
-  else if (type === '2C') { d = `M${cx} 2 Q${cx+14} 7, ${cx} 13 Q${cx-14} 19, ${cx} 24 Q${cx+14} 29, ${cx} 35 Q${cx-14} 41, ${cx} 46 Q${cx+14} 51, ${cx} 57 Q${cx-14} 63, ${cx} 68`; }
-  else if (type === '3' || type === '3A') { d = `M${cx} 2 C${cx+18} 5, ${cx+18} 16, ${cx} 18 C${cx-18} 20, ${cx-18} 31, ${cx} 33 C${cx+18} 35, ${cx+18} 46, ${cx} 48 C${cx-18} 50, ${cx-18} 61, ${cx} 63 L${cx} 68`; sw = 1.8; }
-  else if (type === '3B') { d = `M${cx} 2 C${cx+16} 4, ${cx+16} 12, ${cx} 14 C${cx-16} 16, ${cx-16} 24, ${cx} 26 C${cx+16} 28, ${cx+16} 36, ${cx} 38 C${cx-16} 40, ${cx-16} 48, ${cx} 50 C${cx+16} 52, ${cx+16} 60, ${cx} 62 L${cx} 68`; sw = 1.8; }
-  else if (type === '3C') { d = `M${cx} 2 C${cx+14} 3, ${cx+14} 9, ${cx} 10 C${cx-14} 11, ${cx-14} 17, ${cx} 18 C${cx+14} 19, ${cx+14} 25, ${cx} 26 C${cx-14} 27, ${cx-14} 33, ${cx} 34 C${cx+14} 35, ${cx+14} 41, ${cx} 42 C${cx-14} 43, ${cx-14} 49, ${cx} 50 C${cx+14} 51, ${cx+14} 57, ${cx} 58 C${cx-14} 59, ${cx-14} 65, ${cx} 66`; sw = 1.7; }
-  else if (type === '4' || type === '4A') { d = `M${cx} 2 C${cx+11} 3, ${cx+11} 7, ${cx} 8 C${cx-11} 9, ${cx-11} 13, ${cx} 14 C${cx+11} 15, ${cx+11} 19, ${cx} 20 C${cx-11} 21, ${cx-11} 25, ${cx} 26 C${cx+11} 27, ${cx+11} 31, ${cx} 32 C${cx-11} 33, ${cx-11} 37, ${cx} 38 C${cx+11} 39, ${cx+11} 43, ${cx} 44 C${cx-11} 45, ${cx-11} 49, ${cx} 50 C${cx+11} 51, ${cx+11} 55, ${cx} 56 C${cx-11} 57, ${cx-11} 61, ${cx} 62 C${cx+11} 63, ${cx+11} 67, ${cx} 68`; sw = 1.5; }
-  else if (type === '4B') { let y = 2; d = `M${cx} ${y}`; let left = true; while (y + 6 <= 68) { y += 6; d += ` L${left ? cx-10 : cx+10} ${y}`; left = !left; } sw = 1.5; }
-  else if (type === '4C') { d = `M${cx} 2`; for (let y = 2; y + 5 <= 68; y += 5) { d += ` C${cx+9} ${y+1}, ${cx+9} ${y+4}, ${cx} ${y+5} C${cx-9} ${y+6}, ${cx-9} ${y+9}, ${cx} ${y+10}`; y += 5; } sw = 1.4; }
-  if (!d) return null;
-  return <Svg width={size * 0.7} height={size} viewBox="0 0 50 70"><Path d={d} stroke={stroke} strokeWidth={sw} fill="none" strokeLinecap="round" strokeLinejoin="round" /></Svg>;
-}
-
-function IconChevron() {
-  return <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={Colors.muted} strokeWidth={2} strokeLinecap="round"><Path d="M9 18l6-6-6-6" /></Svg>;
-}
+// ─── Icons ───────────────────────────────────────────────────────
+const IC = {
+  Chevron: () => <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={Colors.muted} strokeWidth={2} strokeLinecap="round"><Path d="M9 18l6-6-6-6" /></Svg>,
+  Wallet: () => <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={Colors.ink} strokeWidth={1.6} strokeLinecap="round"><Rect x="2" y="5" width="20" height="14" rx="2" /><Path d="M2 10h20" /></Svg>,
+  Star: () => <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={Colors.violet} strokeWidth={1.6} strokeLinecap="round"><Path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z" /></Svg>,
+  Heart: () => <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={Colors.ink} strokeWidth={1.6}><Path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" /></Svg>,
+  Gift: () => <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={Colors.violet} strokeWidth={1.6} strokeLinecap="round"><Rect x="3" y="8" width="18" height="4" rx="1" /><Path d="M12 8v13" /><Path d="M19 12v7a2 2 0 01-2 2H7a2 2 0 01-2-2v-7" /><Path d="M7.5 8a2.5 2.5 0 010-5C10 3 12 8 12 8" /><Path d="M16.5 8a2.5 2.5 0 000-5C14 3 12 8 12 8" /></Svg>,
+  Calendar: () => <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={Colors.ink} strokeWidth={1.6} strokeLinecap="round"><Rect x="3" y="4" width="18" height="18" rx="2" /><Line x1="16" y1="2" x2="16" y2="6" /><Line x1="8" y1="2" x2="8" y2="6" /><Line x1="3" y1="10" x2="21" y2="10" /></Svg>,
+  Settings: () => <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={Colors.ink} strokeWidth={1.6} strokeLinecap="round"><Circle cx="12" cy="12" r="3" /><Path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z" /></Svg>,
+  CreditCard: () => <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={Colors.ink} strokeWidth={1.6} strokeLinecap="round"><Rect x="1" y="4" width="22" height="16" rx="2" /><Line x1="1" y1="10" x2="23" y2="10" /></Svg>,
+  HelpCircle: () => <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={Colors.ink} strokeWidth={1.6} strokeLinecap="round"><Circle cx="12" cy="12" r="10" /><Path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3" /><Line x1="12" y1="17" x2="12.01" y2="17" /></Svg>,
+  Shield: () => <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={Colors.ink} strokeWidth={1.6} strokeLinecap="round"><Path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></Svg>,
+  LogOut: () => <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={Colors.error} strokeWidth={1.6} strokeLinecap="round"><Path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" /><Path d="M16 17l5-5-5-5" /><Line x1="21" y1="12" x2="9" y2="12" /></Svg>,
+  BarChart: () => <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={Colors.ink} strokeWidth={1.6} strokeLinecap="round"><Path d="M18 20V10M12 20V4M6 20v-6" /></Svg>,
+  Edit: () => <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={Colors.violet} strokeWidth={1.6} strokeLinecap="round"><Path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" /><Path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" /></Svg>,
+  Flame: () => <Svg width={16} height={16} viewBox="0 0 24 24" fill={Colors.violet} stroke="none"><Path d="M12 2c1 4-2 6-2 10a4 4 0 008 0c0-2-1-3-2-4 0 2-1 3-2 3s-2-1-2-3c0-1 .5-2 1-3-1 0-1.5 1-1.5 1S10 4 12 2z" /></Svg>,
+};
 
 const TYPE_NAMES: Record<string, string> = {
   '1A': 'Pin Straight', '1B': 'Straight with Body', '1C': 'Straight & Thick',
@@ -37,215 +35,215 @@ const TYPE_NAMES: Record<string, string> = {
   '3A': 'Loose Curls', '3B': 'Springy Ringlets', '3C': 'Tight Corkscrews',
   '4A': 'Coil Springs', '4B': 'Z-Pattern Coils', '4C': 'Ultra-Tight Coils',
 };
-const POROSITY_NAMES: Record<string, string> = { low: 'Low Porosity', medium: 'Medium Porosity', high: 'High Porosity', unsure: 'Unknown' };
-const GOAL_LABELS: Record<string, string> = { moisture: 'More moisture', growth: 'Length retention', definition: 'Curl definition', frizz: 'Frizz control', scalp_goal: 'Healthier scalp', damage: 'Repair damage' };
-const SCALP_LABELS: Record<string, string> = { oily: 'Oily', dry: 'Dry', flaky: 'Flaky', sensitive: 'Sensitive', buildup: 'Buildup', healthy: 'Healthy' };
-const HISTORY_LABELS: Record<string, string> = { colour: 'Colour treated', relaxer: 'Relaxed', heat: 'Heat styling', protective: 'Protective styles', natural: 'Fully natural', transitioning: 'Transitioning' };
+const TIER_LABELS: Record<string, string> = { free: 'Free', pro: 'Tressie Pro', pro_plus: 'Tressie Pro+' };
 
+// ─── Row Component ───────────────────────────────────────────────
+function MenuRow({ icon, label, sublabel, right, rightColor, onPress, last, destructive }: {
+  icon: React.ReactNode; label: string; sublabel?: string; right?: string; rightColor?: string;
+  onPress: () => void; last?: boolean; destructive?: boolean;
+}) {
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [st.menuRow, last && { borderBottomWidth: 0 }, pressed && { backgroundColor: '#F9F8FC' }]}>
+      <View style={st.menuIcon}>{icon}</View>
+      <View style={st.menuBody}>
+        <Text style={[st.menuLabel, destructive && { color: Colors.error }]}>{label}</Text>
+        {sublabel && <Text style={st.menuSublabel}>{sublabel}</Text>}
+      </View>
+      {right && <Text style={[st.menuRight, rightColor ? { color: rightColor } : null]}>{right}</Text>}
+      {!destructive && <IC.Chevron />}
+    </Pressable>
+  );
+}
+
+function SectionLabel({ children }: { children: string }) {
+  return <Text style={st.sectionLabel}>{children}</Text>;
+}
+
+// ─── Screen ──────────────────────────────────────────────────────
 export default function ProfileScreen() {
   const router = useRouter();
-  const [user, setUser] = useState<any>(null);
-  const [quiz, setQuiz] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [email, setEmail] = useState('');
+  const [name, setName] = useState('User');
+  const [hairType, setHairType] = useState('');
+  const [xp, setXp] = useState(0);
+  const [streak, setStreak] = useState(0);
+  const [walletPence, setWalletPence] = useState(0);
+  const [tier, setTier] = useState('free');
+  const [totalFavs, setTotalFavs] = useState(0);
+  const [upcomingBookings, setUpcomingBookings] = useState(0);
 
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setUser(data.user));
-    AsyncStorage.getItem('tressana_quiz').then(raw => {
-      if (raw) setQuiz(JSON.parse(raw));
-    });
+  const fetchData = useCallback(async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setEmail(user.email || '');
+        setName(user.user_metadata?.full_name || user.email?.split('@')[0] || 'User');
+      }
+
+      const quizRaw = await AsyncStorage.getItem('tressana_quiz');
+      if (quizRaw) {
+        const q = JSON.parse(quizRaw);
+        setHairType(q.hairType || '');
+      }
+
+      if (user) {
+        try {
+          const { data: xpData } = await supabase.from('xp_balances').select('current_balance, current_daily_streak').eq('user_id', user.id).maybeSingle();
+          if (xpData) { setXp(xpData.current_balance || 0); setStreak(xpData.current_daily_streak || 0); }
+        } catch (e) {}
+
+        try {
+          const { data: wData } = await supabase.from('wallet_balances').select('balance_pence').eq('user_id', user.id).maybeSingle();
+          if (wData) setWalletPence(wData.balance_pence || 0);
+        } catch (e) {}
+
+        try {
+          const { data: sData } = await supabase.from('user_subscriptions').select('tier').eq('user_id', user.id).maybeSingle();
+          if (sData) setTier(sData.tier || 'free');
+        } catch (e) {}
+
+        try {
+          const { count } = await supabase.from('favourites').select('id', { count: 'exact', head: true }).eq('user_id', user.id);
+          setTotalFavs(count || 0);
+        } catch (e) {}
+
+        try {
+          const { count } = await supabase.from('bookings').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('status', 'confirmed').gte('appointment_date', new Date().toISOString().split('T')[0]);
+          setUpcomingBookings(count || 0);
+        } catch (e) {}
+      }
+    } catch (e) {
+      console.log('Profile fetch error:', e);
+    }
+    setLoading(false);
   }, []);
 
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    router.replace('/');
-  };
+  useFocusEffect(useCallback(() => { fetchData(); }, [fetchData]));
 
-  const hairType = quiz?.hairType || '';
+  const handleRefresh = async () => { setRefreshing(true); await fetchData(); setRefreshing(false); };
+
+  const handleSignOut = async () => { await supabase.auth.signOut(); router.replace('/'); };
+
   const typeName = TYPE_NAMES[hairType] || '';
-  const porosity = quiz?.porosity || 'unsure';
-  const goals = (quiz?.goals as string[]) || [];
-  const scalp = (quiz?.scalp as string[]) || [];
-  const history = (quiz?.history as string[]) || [];
-  const hasQuiz = !!quiz;
+  const tierLabel = TIER_LABELS[tier] || 'Free';
+  const initial = name.charAt(0).toUpperCase();
+
+  if (loading) {
+    return <View style={st.loadingWrap}><ActivityIndicator size="large" color={Colors.violet} /></View>;
+  }
 
   return (
-    <ScrollView style={st.container} contentContainerStyle={st.scroll} showsVerticalScrollIndicator={false}>
-      <Text style={st.pageTitle}>Profile</Text>
+    <ScrollView
+      style={st.container} contentContainerStyle={st.scroll}
+      showsVerticalScrollIndicator={false}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={Colors.violet} />}
+    >
+      <View style={st.header}><Text style={st.pageTitle}>Profile</Text></View>
 
-      {/* Hair Type Hero Card */}
-      {hasQuiz ? (
-        <Animated.View entering={FadeInUp.duration(400)}>
-          <LinearGradient colors={['#120B2E', '#332463', '#7643AC']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={st.heroCard}>
-            <View style={st.heroTop}>
-              <View style={st.heroPattern}>
-                <CurlPattern type={hairType} size={80} color="rgba(255,255,255,0.25)" />
-                <View style={st.heroBadge}>
-                  <Text style={st.heroBadgeText}>{hairType}</Text>
-                </View>
-              </View>
-              <View style={st.heroInfo}>
-                <Text style={st.heroTypeName}>{typeName}</Text>
-                <Text style={st.heroPorosity}>{POROSITY_NAMES[porosity]}</Text>
-              </View>
-            </View>
-            <View style={st.tagRow}>
-              {goals.slice(0, 3).map(g => (
-                <View key={g} style={st.heroTag}>
-                  <Text style={st.heroTagText}>{GOAL_LABELS[g] || g}</Text>
-                </View>
-              ))}
-            </View>
-          </LinearGradient>
-        </Animated.View>
-      ) : (
-        <Animated.View entering={FadeInUp.duration(400)} style={st.noQuizCard}>
-          <Text style={st.noQuizTitle}>Discover your hair type</Text>
-          <Text style={st.noQuizDesc}>Take the 2-minute quiz to get personalised recommendations, a custom routine, and product picks.</Text>
-          <Pressable onPress={() => router.push('/quiz')} style={st.noQuizBtn}>
-            <LinearGradient colors={['#7643AC', '#F484B9']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={st.noQuizBtnInner}>
-              <Text style={st.noQuizBtnText}>Take the quiz</Text>
-            </LinearGradient>
-          </Pressable>
-        </Animated.View>
-      )}
-
-      {/* Stats Row */}
-      {hasQuiz && (
-        <Animated.View entering={FadeInUp.delay(100).duration(400)} style={st.statsRow}>
-          <View style={st.stat}>
-            <Text style={st.statValue}>{hairType}</Text>
-            <Text style={st.statLabel}>Hair type</Text>
+      {/* User card */}
+      <Animated.View entering={FadeInUp.duration(350)}>
+        <Pressable onPress={() => router.push('/settings')} style={st.userCard}>
+          <View style={st.avatar}><Text style={st.avatarText}>{initial}</Text></View>
+          <View style={st.userInfo}>
+            <Text style={st.userName}>{name}</Text>
+            <Text style={st.userMeta}>{hairType ? `Type ${hairType} · ${typeName}` : 'Complete your hair quiz'}</Text>
+            <View style={st.tierBadge}><Text style={st.tierText}>{tierLabel}</Text></View>
           </View>
-          <View style={st.statLine} />
-          <View style={st.stat}>
-            <Text style={[st.statValue, { textTransform: 'capitalize' }]}>{porosity}</Text>
-            <Text style={st.statLabel}>Porosity</Text>
-          </View>
-          <View style={st.statLine} />
-          <View style={st.stat}>
-            <Text style={st.statValue}>{goals.length}</Text>
-            <Text style={st.statLabel}>Goals</Text>
-          </View>
-        </Animated.View>
-      )}
-
-      {/* Scalp + History */}
-      {hasQuiz && (scalp.length > 0 || history.length > 0) && (
-        <Animated.View entering={FadeInUp.delay(200).duration(400)} style={st.detailCard}>
-          {scalp.length > 0 && (
-            <View>
-              <Text style={st.detailTitle}>Scalp condition</Text>
-              <View style={st.chipRow}>
-                {scalp.map(s => (
-                  <View key={s} style={st.chip}><Text style={st.chipText}>{SCALP_LABELS[s] || s}</Text></View>
-                ))}
-              </View>
-            </View>
-          )}
-          {history.length > 0 && (
-            <View style={scalp.length > 0 ? { marginTop: 16 } : undefined}>
-              <Text style={st.detailTitle}>Hair history</Text>
-              <View style={st.chipRow}>
-                {history.map(h => (
-                  <View key={h} style={st.chip}><Text style={st.chipText}>{HISTORY_LABELS[h] || h}</Text></View>
-                ))}
-              </View>
-            </View>
-          )}
-        </Animated.View>
-      )}
-
-      {/* Goals */}
-      {hasQuiz && goals.length > 0 && (
-        <Animated.View entering={FadeInUp.delay(300).duration(400)} style={st.detailCard}>
-          <Text style={st.detailTitle}>Your hair goals</Text>
-          {goals.map(g => (
-            <View key={g} style={st.goalRow}>
-              <View style={st.goalDot} />
-              <Text style={st.goalText}>{GOAL_LABELS[g] || g}</Text>
-            </View>
-          ))}
-        </Animated.View>
-      )}
-
-      {/* Menu */}
-      <Animated.View entering={FadeInUp.delay(400).duration(400)} style={st.menu}>
-        <Pressable onPress={() => router.push('/reveal')} style={st.menuItem}>
-          <Text style={st.menuLabel}>View full results</Text>
-          <IconChevron />
-        </Pressable>
-        <Pressable onPress={() => router.push('/quiz')} style={st.menuItem}>
-          <Text style={st.menuLabel}>Retake quiz</Text>
-          <IconChevron />
-        </Pressable>
-        <Pressable style={[st.menuItem, { borderBottomWidth: 0 }]}>
-          <Text style={st.menuLabel}>Settings</Text>
-          <IconChevron />
+          <IC.Edit />
         </Pressable>
       </Animated.View>
 
-      {/* Sign out */}
-      {user && (
-        <View style={st.authSection}>
-          <Text style={st.authEmail}>{user.email}</Text>
-          <Pressable onPress={handleSignOut} style={st.signOutBtn}>
-            <Text style={st.signOutText}>Sign out</Text>
-          </Pressable>
+      {/* Stats */}
+      <Animated.View entering={FadeInUp.delay(50).duration(350)} style={st.statsRow}>
+        <Pressable onPress={() => router.push('/xp-rewards')} style={st.statCard}>
+          <Text style={st.statValue}>{xp.toLocaleString()}</Text>
+          <Text style={st.statLabel}>XP</Text>
+        </Pressable>
+        <View style={st.statDivider} />
+        <Pressable onPress={() => router.push('/wallet')} style={st.statCard}>
+          <Text style={st.statValue}>£{(walletPence / 100).toFixed(2)}</Text>
+          <Text style={st.statLabel}>Wallet</Text>
+        </Pressable>
+        <View style={st.statDivider} />
+        <View style={st.statCard}>
+          <View style={st.streakRow}><IC.Flame /><Text style={st.statValue}>{streak}</Text></View>
+          <Text style={st.statLabel}>Streak</Text>
         </View>
-      )}
+      </Animated.View>
 
-      <Text style={st.version}>Tressana.ai v1.0.0</Text>
+      {/* Activity */}
+      <Animated.View entering={FadeInUp.delay(100).duration(350)}>
+        <SectionLabel>Activity</SectionLabel>
+        <View style={st.menuCard}>
+          <MenuRow icon={<IC.Calendar />} label="My Bookings" sublabel={upcomingBookings > 0 ? `${upcomingBookings} upcoming` : 'No upcoming bookings'} onPress={() => router.push('/bookings')} />
+          <MenuRow icon={<IC.Heart />} label="Favourites" sublabel={`${totalFavs} saved items`} onPress={() => router.push('/favourites')} />
+          <MenuRow icon={<IC.Star />} label="XP & Rewards" sublabel={`${xp.toLocaleString()} XP available`} onPress={() => router.push('/xp-rewards')} />
+          <MenuRow icon={<IC.Gift />} label="Refer a Friend" sublabel="You both get £5 off + 200 XP" onPress={() => router.push('/referral')} last />
+        </View>
+      </Animated.View>
+
+      {/* Account */}
+      <Animated.View entering={FadeInUp.delay(150).duration(350)}>
+        <SectionLabel>Account</SectionLabel>
+        <View style={st.menuCard}>
+          <MenuRow icon={<IC.Wallet />} label="Wallet" right={`£${(walletPence / 100).toFixed(2)}`} onPress={() => router.push('/wallet')} />
+          <MenuRow icon={<IC.CreditCard />} label="Subscription" right={tierLabel} rightColor={tier !== 'free' ? Colors.violet : undefined} onPress={() => router.push('/subscription')} />
+          <MenuRow icon={<IC.BarChart />} label="Hair Health Score" onPress={() => router.push('/reveal')} last />
+        </View>
+      </Animated.View>
+
+      {/* General — FIXED ROUTING */}
+      <Animated.View entering={FadeInUp.delay(200).duration(350)}>
+        <SectionLabel>General</SectionLabel>
+        <View style={st.menuCard}>
+          <MenuRow icon={<IC.Settings />} label="Settings" sublabel="Notifications, appearance, account" onPress={() => router.push('/settings')} />
+          <MenuRow icon={<IC.Shield />} label="Privacy & Data" sublabel="Your data, export, delete account" onPress={() => router.push('/privacy')} />
+          <MenuRow icon={<IC.HelpCircle />} label="Help & Support" sublabel="FAQ, contact us" onPress={() => router.push('/help')} last />
+        </View>
+      </Animated.View>
+
+      {/* Sign out */}
+      <Animated.View entering={FadeInUp.delay(250).duration(350)}>
+        <View style={st.menuCard}>
+          <MenuRow icon={<IC.LogOut />} label="Sign out" onPress={handleSignOut} destructive last />
+        </View>
+        <Text style={st.emailLabel}>{email}</Text>
+        <Text style={st.version}>Tressana v1.0.0</Text>
+      </Animated.View>
     </ScrollView>
   );
 }
 
 const st = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.porcelain },
-  scroll: { paddingTop: Platform.OS === 'ios' ? 62 : 48, paddingBottom: 100 },
-  pageTitle: { fontFamily: Fonts.heading, fontSize: 24, color: Colors.ink, paddingHorizontal: 20, marginBottom: 20, letterSpacing: -0.5 },
-
-  heroCard: { marginHorizontal: 20, borderRadius: 22, padding: 22, marginBottom: 16 },
-  heroTop: { flexDirection: 'row', alignItems: 'center', gap: 18, marginBottom: 16 },
-  heroPattern: { alignItems: 'center', justifyContent: 'center', width: 72, height: 80 },
-  heroBadge: { position: 'absolute', width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.15)', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.25)', alignItems: 'center', justifyContent: 'center' },
-  heroBadgeText: { fontFamily: Fonts.heading, fontSize: 16, color: '#fff' },
-  heroInfo: { flex: 1 },
-  heroTypeName: { fontFamily: Fonts.heading, fontSize: 20, color: '#fff', marginBottom: 4 },
-  heroPorosity: { fontFamily: Fonts.bodyMedium, fontSize: 13, color: 'rgba(255,255,255,0.6)' },
-  tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  heroTag: { backgroundColor: 'rgba(255,255,255,0.12)', paddingVertical: 4, paddingHorizontal: 12, borderRadius: 10 },
-  heroTagText: { fontFamily: Fonts.bodyMedium, fontSize: 10, color: 'rgba(255,255,255,0.8)' },
-
-  noQuizCard: { marginHorizontal: 20, marginBottom: 16, backgroundColor: Colors.white, borderRadius: 22, padding: 24, borderWidth: 1.5, borderColor: Colors.border, alignItems: 'center' },
-  noQuizTitle: { fontFamily: Fonts.heading, fontSize: 18, color: Colors.ink, marginBottom: 8 },
-  noQuizDesc: { fontFamily: Fonts.body, fontSize: 13, color: Colors.muted, textAlign: 'center', lineHeight: 20, marginBottom: 18, maxWidth: 280 },
-  noQuizBtn: { borderRadius: Radius.lg, overflow: 'hidden', width: '100%' },
-  noQuizBtnInner: { paddingVertical: 15, alignItems: 'center' },
-  noQuizBtnText: { fontFamily: Fonts.headingSemi, fontSize: 14, color: '#fff' },
-
-  statsRow: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 20, backgroundColor: Colors.white, borderRadius: 18, paddingVertical: 18, paddingHorizontal: 16, borderWidth: 1.5, borderColor: Colors.border, marginBottom: 14 },
-  stat: { flex: 1, alignItems: 'center' },
-  statValue: { fontFamily: Fonts.heading, fontSize: 18, color: Colors.ink },
-  statLabel: { fontFamily: Fonts.body, fontSize: 10, color: Colors.muted, marginTop: 3 },
-  statLine: { width: 1, height: 28, backgroundColor: Colors.border },
-
-  detailCard: { marginHorizontal: 20, marginBottom: 14, backgroundColor: Colors.white, borderRadius: 18, padding: 20, borderWidth: 1.5, borderColor: Colors.border },
-  detailTitle: { fontFamily: Fonts.headingSemi, fontSize: 14, color: Colors.ink, marginBottom: 10 },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { backgroundColor: '#F7F5FB', paddingVertical: 6, paddingHorizontal: 14, borderRadius: 10, borderWidth: 1, borderColor: Colors.border },
-  chipText: { fontFamily: Fonts.bodyMedium, fontSize: 12, color: Colors.ink },
-
-  goalRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
-  goalDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.violet },
-  goalText: { fontFamily: Fonts.body, fontSize: 13, color: Colors.ink },
-
-  menu: { marginHorizontal: 20, marginBottom: 14, backgroundColor: Colors.white, borderRadius: 18, borderWidth: 1.5, borderColor: Colors.border, overflow: 'hidden' },
-  menuItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 16, paddingHorizontal: 20, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  menuLabel: { fontFamily: Fonts.bodyMedium, fontSize: 14, color: Colors.ink },
-
-  authSection: { marginHorizontal: 20, marginBottom: 14, alignItems: 'center', gap: 12 },
-  authEmail: { fontFamily: Fonts.body, fontSize: 12, color: Colors.muted },
-  signOutBtn: { width: '100%', paddingVertical: 14, borderRadius: Radius.lg, borderWidth: 1.5, borderColor: Colors.error, alignItems: 'center' },
-  signOutText: { fontFamily: Fonts.bodySemi, fontSize: 14, color: Colors.error },
-
-  version: { fontFamily: Fonts.body, fontSize: 10, color: Colors.muted, textAlign: 'center', marginTop: 16, opacity: 0.4 },
+  scroll: { paddingTop: Platform.OS === 'ios' ? 62 : 48, paddingBottom: 40 },
+  loadingWrap: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.porcelain },
+  header: { paddingHorizontal: 20, marginBottom: 20 },
+  pageTitle: { fontFamily: Fonts.heading, fontSize: 28, color: Colors.ink, letterSpacing: -0.5 },
+  userCard: { flexDirection: 'row', alignItems: 'center', gap: 16, marginHorizontal: 20, marginBottom: 16, backgroundColor: Colors.white, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: Colors.border },
+  avatar: { width: 56, height: 56, borderRadius: 28, backgroundColor: Colors.ink, alignItems: 'center', justifyContent: 'center' },
+  avatarText: { fontFamily: Fonts.heading, fontSize: 22, color: Colors.porcelain },
+  userInfo: { flex: 1 },
+  userName: { fontFamily: Fonts.heading, fontSize: 20, color: Colors.ink, marginBottom: 2 },
+  userMeta: { fontFamily: Fonts.body, fontSize: 12, color: Colors.muted, marginBottom: 8 },
+  tierBadge: { alignSelf: 'flex-start', backgroundColor: Colors.violet, paddingVertical: 3, paddingHorizontal: 12, borderRadius: 12 },
+  tierText: { fontFamily: Fonts.bodySemi, fontSize: 11, color: Colors.white },
+  statsRow: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 20, marginBottom: 24, backgroundColor: Colors.white, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Colors.border },
+  statCard: { flex: 1, alignItems: 'center' },
+  statValue: { fontFamily: Fonts.heading, fontSize: 18, color: Colors.ink, marginBottom: 2 },
+  statLabel: { fontFamily: Fonts.body, fontSize: 11, color: Colors.muted },
+  statDivider: { width: 1, height: 32, backgroundColor: Colors.border },
+  streakRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  sectionLabel: { fontFamily: Fonts.bodySemi, fontSize: 13, color: Colors.muted, textTransform: 'uppercase', letterSpacing: 0.8, paddingHorizontal: 20, marginBottom: 8, marginTop: 4 },
+  menuCard: { marginHorizontal: 20, marginBottom: 20, backgroundColor: Colors.white, borderRadius: 16, borderWidth: 1, borderColor: Colors.border, overflow: 'hidden' },
+  menuRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 16, paddingHorizontal: 18, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  menuIcon: { width: 24, alignItems: 'center' },
+  menuBody: { flex: 1 },
+  menuLabel: { fontFamily: Fonts.bodyMedium, fontSize: 15, color: Colors.ink },
+  menuSublabel: { fontFamily: Fonts.body, fontSize: 12, color: Colors.muted, marginTop: 1 },
+  menuRight: { fontFamily: Fonts.bodySemi, fontSize: 13, color: Colors.ink, marginRight: 4 },
+  emailLabel: { fontFamily: Fonts.body, fontSize: 12, color: Colors.muted, textAlign: 'center', marginTop: 4 },
+  version: { fontFamily: Fonts.body, fontSize: 11, color: Colors.muted, textAlign: 'center', marginTop: 4, opacity: 0.4 },
 });

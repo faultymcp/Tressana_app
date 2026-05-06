@@ -1,322 +1,252 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Pressable, Platform,
-  ActivityIndicator, Dimensions, TextInput,
+  Linking, ActivityIndicator,
 } from 'react-native';
-import { Image } from 'expo-image';
-import { useRouter } from 'expo-router';
-import Svg, { Path, Circle } from 'react-native-svg';
+import Svg, { Path } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors, Fonts, Radius } from '@/constants/theme';
 import { supabase } from '@/lib/supabase';
 import Animated, { FadeInUp } from 'react-native-reanimated';
 
-const { width } = Dimensions.get('window');
-const CARD_W = (width - 52) / 2;
-const R2_BASE = 'https://pub-bc435fe56f2141fdae2465001577bbcd.r2.dev';
+// ─── Icons ───────────────────────────────────────────────────────
+function IconArrowRight() {
+  return <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={Colors.violet} strokeWidth={2} strokeLinecap="round"><Path d="M5 12h14M12 5l7 7-7 7" /></Svg>;
+}
 
-const IC = {
-  Search: () => <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={Colors.muted} strokeWidth={2} strokeLinecap="round"><Circle cx="11" cy="11" r="8" /><Path d="M21 21l-4.35-4.35" /></Svg>,
-  Heart: ({ filled }: { filled?: boolean }) => <Svg width={18} height={18} viewBox="0 0 24 24" fill={filled ? Colors.pink : 'none'} stroke={filled ? Colors.pink : '#fff'} strokeWidth={1.8}><Path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" /></Svg>,
-  Filter: () => <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={Colors.ink} strokeWidth={1.8} strokeLinecap="round"><Path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6" /></Svg>,
+// ─── Style suggestions per type ──────────────────────────────────
+const STYLE_SUGGESTIONS: Record<string, { name: string; desc: string }[]> = {
+  '1': [
+    { name: 'Sleek Straight', desc: 'Classic polished straight look' },
+    { name: 'Blowout', desc: 'Voluminous bouncy blow-dry' },
+    { name: 'Layered Cut', desc: 'Movement and dimension' },
+    { name: 'Curtain Bangs', desc: 'Face-framing 70s vibes' },
+    { name: 'Half Up', desc: 'Casual elegance for everyday' },
+  ],
+  '2': [
+    { name: 'Defined Waves', desc: 'Enhance your natural S-pattern' },
+    { name: 'Beach Waves', desc: 'Effortless, textured, undone' },
+    { name: 'Shag Cut', desc: 'Layered with volume and movement' },
+    { name: 'Scrunched Waves', desc: 'Scrunch and go — minimal effort' },
+    { name: 'Diffused Curls', desc: 'Diffuser technique for max definition' },
+  ],
+  '3': [
+    { name: 'Wash and Go', desc: 'Product, scrunch, air-dry, done' },
+    { name: 'Twist Out', desc: 'Defined spirals from twists' },
+    { name: 'Braid Out', desc: 'Stretched, defined waves from braids' },
+    { name: 'Defined Curls', desc: 'Finger coil or Denman brush method' },
+    { name: 'Curly Bob', desc: 'Short, bouncy, full of personality' },
+    { name: 'Pineapple Updo', desc: 'High loose pony to preserve curls' },
+  ],
+  '4': [
+    { name: 'Protective Twists', desc: 'Two-strand twists for low manipulation' },
+    { name: 'Bantu Knots', desc: 'Knotted sections, stunning unravelled' },
+    { name: 'Afro Puff', desc: 'Pulled up, full, proud' },
+    { name: 'Flat Twist', desc: 'Close to scalp, versatile styling' },
+    { name: 'Finger Coils', desc: 'Individually defined tight curls' },
+    { name: 'Stretched Afro', desc: 'Blow-out or banded for length' },
+    { name: 'High Puff', desc: 'Quick, elegant, everyday go-to' },
+  ],
 };
 
-const CATEGORIES = ['All', 'Protective', 'Natural', 'Braids', 'Locs', 'Wigs', 'Colour', 'Short', 'Long'];
-
-const HAIR_TYPE_TABS = ['All', '1', '2', '3', '4'];
-
-type Hairstyle = {
-  id: string;
-  name: string;
-  style_category: string;
-  hair_type: string;
-  image_url: string;
-  save_count: number;
-  time_estimate: string;
-};
+// ─── Product Categories ──────────────────────────────────────────
+const CATEGORIES = ['all', 'shampoo', 'conditioner', 'styling', 'treatment', 'oil', 'tool'];
 
 export default function DiscoverScreen() {
-  const router = useRouter();
+  const [hairType, setHairType] = useState('');
+  const [activeStyle, setActiveStyle] = useState('');
+  const [activeCategory, setActiveCategory] = useState('all');
+  const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [styles, setStyles] = useState<Hairstyle[]>([]);
-  const [search, setSearch] = useState('');
-  const [category, setCategory] = useState('All');
-  const [hairTypeFilter, setHairTypeFilter] = useState('All');
-  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
-  const [page, setPage] = useState(0);
-  const [hasMore, setHasMore] = useState(true);
-  const PAGE_SIZE = 20;
 
-  // Load user's hair type for default filter
+  const typeGroup = hairType.charAt(0) || '3';
+  const styles_list = STYLE_SUGGESTIONS[typeGroup] || STYLE_SUGGESTIONS['3'];
+
   useEffect(() => {
     AsyncStorage.getItem('tressana_quiz').then(raw => {
       if (raw) {
-        const q = JSON.parse(raw);
-        const type = q.hairType?.charAt(0);
-        if (type) setHairTypeFilter(type);
+        const data = JSON.parse(raw);
+        setHairType(data.hairType || '3A');
       }
     });
-    loadFavourites();
   }, []);
 
   useEffect(() => {
-    setPage(0);
-    setStyles([]);
-    setHasMore(true);
-    fetchStyles(0);
-  }, [category, hairTypeFilter, search]);
-
-  const loadFavourites = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      const { data } = await supabase.from('favourites').select('hairstyle_id').eq('user_id', user.id).eq('favourite_type', 'hairstyle');
-      if (data) setSavedIds(new Set(data.map(f => f.hairstyle_id)));
-    } catch (e) {}
-  };
-
-  const fetchStyles = async (pageNum: number) => {
-    setLoading(pageNum === 0);
-    try {
-      let query = supabase
-        .from('hairstyles')
-        .select('id, name, style_category, hair_type, image_url, save_count, time_estimate')
-        .order('save_count', { ascending: false })
-        .range(pageNum * PAGE_SIZE, (pageNum + 1) * PAGE_SIZE - 1);
-
-      if (category !== 'All') {
-        query = query.ilike('style_category', `%${category}%`);
-      }
-      if (hairTypeFilter !== 'All') {
-        query = query.like('hair_type', `${hairTypeFilter}%`);
-      }
-      if (search.trim()) {
-        query = query.ilike('name', `%${search.trim()}%`);
-      }
-
-      const { data, error } = await query;
-
-      if (error) throw error;
-
-      if (pageNum === 0) {
-        setStyles(data || []);
-      } else {
-        setStyles(prev => [...prev, ...(data || [])]);
-      }
-      setHasMore((data?.length || 0) === PAGE_SIZE);
-    } catch (e) {
-      console.log('Discover fetch error:', e);
+    if (styles_list.length > 0 && !activeStyle) {
+      setActiveStyle(styles_list[0].name);
     }
-    setLoading(false);
-  };
+  }, [styles_list]);
 
-  const toggleSave = async (hairstyleId: string) => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+  // Fetch products from Supabase
+  useEffect(() => {
+    if (!typeGroup) return;
+    setLoading(true);
+    supabase
+      .from('products')
+      .select('*')
+      .contains('hair_types', [typeGroup])
+      .then(({ data }) => {
+        if (data) setProducts(data);
+        setLoading(false);
+      });
+  }, [typeGroup]);
 
-      if (savedIds.has(hairstyleId)) {
-        await supabase.from('favourites').delete().eq('user_id', user.id).eq('hairstyle_id', hairstyleId).eq('favourite_type', 'hairstyle');
-        setSavedIds(prev => { const n = new Set(prev); n.delete(hairstyleId); return n; });
-      } else {
-        await supabase.from('favourites').insert({ user_id: user.id, hairstyle_id: hairstyleId, favourite_type: 'hairstyle' });
-        setSavedIds(prev => new Set(prev).add(hairstyleId));
-      }
-    } catch (e) {}
-  };
-
-  const getImageUrl = (style: Hairstyle) => {
-    if (style.image_url?.startsWith('http')) return style.image_url;
-    if (style.image_url) return `${R2_BASE}/${style.image_url}`;
-    return null;
-  };
+  const filteredProducts = activeCategory === 'all'
+    ? products
+    : products.filter(p => p.category === activeCategory);
 
   return (
     <View style={st.container}>
       {/* Header */}
       <View style={st.header}>
-        <Text style={st.pageTitle}>Discover</Text>
+        <Text style={st.title}>Discover</Text>
+        <Text style={st.subtitle}>Curated for Type {hairType || typeGroup} hair</Text>
       </View>
 
-      {/* Search */}
-      <View style={st.searchWrap}>
-        <View style={st.searchBar}>
-          <IC.Search />
-          <TextInput
-            style={st.searchInput}
-            placeholder="Search hairstyles..."
-            placeholderTextColor={Colors.muted}
-            value={search}
-            onChangeText={setSearch}
-            returnKeyType="search"
-          />
-        </View>
-      </View>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={st.content}>
 
-      {/* Hair type filter */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.filterRow}>
-        {HAIR_TYPE_TABS.map(t => (
-          <Pressable key={t} onPress={() => setHairTypeFilter(t)} style={[st.filterChip, hairTypeFilter === t && st.filterChipActive]}>
-            <Text style={[st.filterText, hairTypeFilter === t && st.filterTextActive]}>
-              {t === 'All' ? 'All types' : `Type ${t}`}
-            </Text>
-          </Pressable>
-        ))}
-      </ScrollView>
-
-      {/* Category pills */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.catRow}>
-        {CATEGORIES.map(c => (
-          <Pressable key={c} onPress={() => setCategory(c)} style={[st.catPill, category === c && st.catPillActive]}>
-            <Text style={[st.catText, category === c && st.catTextActive]}>{c}</Text>
-          </Pressable>
-        ))}
-      </ScrollView>
-
-      {/* Grid */}
-      {loading && styles.length === 0 ? (
-        <View style={st.loadingWrap}><ActivityIndicator size="large" color={Colors.violet} /></View>
-      ) : styles.length === 0 ? (
-        <View style={st.emptyWrap}>
-          <Text style={st.emptyTitle}>No styles found</Text>
-          <Text style={st.emptySub}>Try adjusting your filters or search</Text>
-        </View>
-      ) : (
-        <ScrollView
-          contentContainerStyle={st.grid}
-          showsVerticalScrollIndicator={false}
-          onScroll={({ nativeEvent }) => {
-            const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
-            if (layoutMeasurement.height + contentOffset.y >= contentSize.height - 200 && hasMore && !loading) {
-              const nextPage = page + 1;
-              setPage(nextPage);
-              fetchStyles(nextPage);
-            }
-          }}
-          scrollEventThrottle={400}
-        >
-          <View style={st.gridInner}>
-            {styles.map((s, i) => {
-              const imgUrl = getImageUrl(s);
-              const isSaved = savedIds.has(s.id);
-              return (
-                <Animated.View key={s.id} entering={FadeInUp.delay(20 * (i % 10)).duration(250)}>
-                  <Pressable
-                    onPress={() => router.push({ pathname: '/hairtransfer', params: { reference: imgUrl } })}
-                    style={st.card}
-                  >
-                    {imgUrl ? (
-                      <Image
-                        source={{ uri: imgUrl }}
-                        style={st.cardImg}
-                        contentFit="cover"
-                        placeholder={{ blurhash: 'L6Pj0^jE.mj[_3fQfQfQfQfQfQfQ' }}
-                        transition={200}
-                      />
-                    ) : (
-                      <View style={[st.cardImg, { backgroundColor: '#F0EBFA', alignItems: 'center', justifyContent: 'center' }]}>
-                        <Text style={{ fontFamily: Fonts.body, fontSize: 10, color: Colors.muted }}>No image</Text>
-                      </View>
-                    )}
-
-                    {/* Save button */}
-                    <Pressable onPress={() => toggleSave(s.id)} style={st.saveBtn}>
-                      <IC.Heart filled={isSaved} />
-                    </Pressable>
-
-                    {/* Time badge */}
-                    {s.time_estimate && (
-                      <View style={st.timeBadge}>
-                        <Text style={st.timeText}>{s.time_estimate}</Text>
-                      </View>
-                    )}
-
-                    <View style={st.cardInfo}>
-                      <Text style={st.cardName} numberOfLines={1}>{s.name}</Text>
-                      <View style={st.cardMeta}>
-                        <Text style={st.cardSaves}>{s.save_count || 0} saves</Text>
-                        {s.hair_type && (
-                          <View style={st.typeTag}>
-                            <Text style={st.typeTagText}>{s.hair_type}</Text>
-                          </View>
-                        )}
-                      </View>
-                    </View>
-                  </Pressable>
-                </Animated.View>
-              );
-            })}
-          </View>
-
-          {loading && styles.length > 0 && (
-            <ActivityIndicator size="small" color={Colors.violet} style={{ marginVertical: 20 }} />
-          )}
+        {/* ── Hairstyle Suggestions ── */}
+        <Text style={st.sectionTitle}>Styles for your hair</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.styleScroll}>
+          {styles_list.map((s, i) => {
+            const active = s.name === activeStyle;
+            return (
+              <Pressable key={s.name} onPress={() => setActiveStyle(s.name)} style={[st.styleCard, active && st.styleCardActive]}>
+                <Text style={[st.styleName, active && st.styleNameActive]}>{s.name}</Text>
+                <Text style={[st.styleDesc, active && st.styleDescActive]}>{s.desc}</Text>
+              </Pressable>
+            );
+          })}
         </ScrollView>
-      )}
+
+        {/* Active style detail */}
+        {activeStyle && (
+          <Animated.View entering={FadeInUp.duration(300)} style={st.styleDetail}>
+            <Text style={st.styleDetailTitle}>{activeStyle}</Text>
+            <Text style={st.styleDetailSub}>
+              This style works beautifully with Type {typeGroup} hair. Browse products below that help you achieve and maintain it.
+            </Text>
+            <View style={st.styleDetailTags}>
+              <View style={st.tag}><Text style={st.tagText}>Type {typeGroup}</Text></View>
+              <View style={st.tag}><Text style={st.tagText}>{hairType}</Text></View>
+            </View>
+          </Animated.View>
+        )}
+
+        {/* ── Products Section ── */}
+        <Text style={[st.sectionTitle, { marginTop: 24 }]}>Products for Type {typeGroup}</Text>
+
+        {/* Category filter */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.catScroll}>
+          {CATEGORIES.map(cat => {
+            const active = cat === activeCategory;
+            return (
+              <Pressable key={cat} onPress={() => setActiveCategory(cat)} style={[st.catChip, active && st.catChipActive]}>
+                <Text style={[st.catText, active && st.catTextActive]}>
+                  {cat === 'all' ? 'All' : cat.charAt(0).toUpperCase() + cat.slice(1)}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+
+        {/* Product list */}
+        {loading ? (
+          <View style={st.loadingWrap}><ActivityIndicator size="large" color={Colors.violet} /></View>
+        ) : (
+          <View style={st.prodList}>
+            {filteredProducts.map((p, i) => (
+              <Animated.View key={p.id} entering={FadeInUp.delay(40 * i).duration(250)}>
+                <Pressable onPress={() => Linking.openURL(p.url)} style={st.prodCard}>
+                  <View style={st.prodTop}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={st.prodBrand}>{p.brand}</Text>
+                      <Text style={st.prodName}>{p.name}</Text>
+                    </View>
+                    <Text style={st.prodPrice}>{p.price}</Text>
+                  </View>
+                  <Text style={st.prodDesc}>{p.why_it_works}</Text>
+                  <View style={st.prodBottom}>
+                    <View style={st.prodCatBadge}>
+                      <Text style={st.prodCatText}>{p.category}</Text>
+                    </View>
+                    <Text style={st.prodRetailer}>{p.retailer}</Text>
+                    <View style={st.prodLinkRow}>
+                      <Text style={st.prodLink}>Shop</Text>
+                      <IconArrowRight />
+                    </View>
+                  </View>
+                </Pressable>
+              </Animated.View>
+            ))}
+            {filteredProducts.length === 0 && !loading && (
+              <Text style={st.emptyText}>No products in this category for your hair type.</Text>
+            )}
+          </View>
+        )}
+      </ScrollView>
     </View>
   );
 }
 
 const st = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.porcelain },
-  loadingWrap: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  header: { paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 62 : 48, marginBottom: 12 },
-  pageTitle: { fontFamily: Fonts.heading, fontSize: 28, color: Colors.ink, letterSpacing: -0.5 },
+  header: { paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 62 : 48, paddingBottom: 12 },
+  title: { fontFamily: Fonts.heading, fontSize: 24, color: Colors.ink, letterSpacing: -0.5 },
+  subtitle: { fontFamily: Fonts.body, fontSize: 13, color: Colors.muted, marginTop: 3 },
 
-  searchWrap: { paddingHorizontal: 20, marginBottom: 12 },
-  searchBar: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    backgroundColor: Colors.white, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 12,
-    borderWidth: 1, borderColor: Colors.border,
-  },
-  searchInput: { flex: 1, fontFamily: Fonts.body, fontSize: 14, color: Colors.ink, padding: 0 },
+  content: { paddingBottom: 100 },
 
-  filterRow: { paddingHorizontal: 20, gap: 8, marginBottom: 8 },
-  filterChip: {
-    paddingVertical: 6, paddingHorizontal: 16, borderRadius: 20,
-    borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.white,
-  },
-  filterChipActive: { backgroundColor: Colors.ink, borderColor: Colors.ink },
-  filterText: { fontFamily: Fonts.bodySemi, fontSize: 12, color: Colors.muted },
-  filterTextActive: { color: '#fff' },
+  sectionTitle: { fontFamily: Fonts.headingSemi, fontSize: 17, color: Colors.ink, paddingHorizontal: 20, marginBottom: 12 },
 
-  catRow: { paddingHorizontal: 20, gap: 8, marginBottom: 16, paddingVertical: 4 },
-  catPill: {
-    paddingVertical: 7, paddingHorizontal: 16, borderRadius: 20,
-    backgroundColor: Colors.white, borderWidth: 1, borderColor: Colors.border,
+  // Style cards
+  styleScroll: { paddingHorizontal: 20, gap: 10, paddingBottom: 4, marginBottom: 16 },
+  styleCard: {
+    width: 150, padding: 16, borderRadius: 16,
+    backgroundColor: Colors.white, borderWidth: 1.5, borderColor: Colors.border,
   },
-  catPillActive: { backgroundColor: Colors.violet, borderColor: Colors.violet },
+  styleCardActive: { borderColor: Colors.violet, backgroundColor: Colors.violet },
+  styleName: { fontFamily: Fonts.bodySemi, fontSize: 14, color: Colors.ink, marginBottom: 4 },
+  styleNameActive: { color: Colors.white },
+  styleDesc: { fontFamily: Fonts.body, fontSize: 11, color: Colors.muted, lineHeight: 16 },
+  styleDescActive: { color: 'rgba(255,255,255,0.75)' },
+
+  // Style detail
+  styleDetail: {
+    marginHorizontal: 20, padding: 20, borderRadius: 18,
+    backgroundColor: Colors.white, borderWidth: 1.5, borderColor: Colors.border,
+  },
+  styleDetailTitle: { fontFamily: Fonts.heading, fontSize: 20, color: Colors.ink, marginBottom: 6 },
+  styleDetailSub: { fontFamily: Fonts.body, fontSize: 13, color: Colors.muted, lineHeight: 20, marginBottom: 14 },
+  styleDetailTags: { flexDirection: 'row', gap: 8 },
+  tag: { backgroundColor: Colors.violetBg2, paddingVertical: 4, paddingHorizontal: 12, borderRadius: 10 },
+  tagText: { fontFamily: Fonts.bodySemi, fontSize: 10, color: Colors.violet },
+
+  // Category chips
+  catScroll: { paddingHorizontal: 20, gap: 8, paddingBottom: 4, marginBottom: 16 },
+  catChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 18, borderWidth: 1.5, borderColor: Colors.border, backgroundColor: Colors.white },
+  catChipActive: { borderColor: Colors.violet, backgroundColor: Colors.violet },
   catText: { fontFamily: Fonts.bodySemi, fontSize: 12, color: Colors.ink },
-  catTextActive: { color: '#fff' },
+  catTextActive: { color: Colors.white },
 
-  emptyWrap: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingBottom: 80 },
-  emptyTitle: { fontFamily: Fonts.heading, fontSize: 18, color: Colors.ink, marginBottom: 4 },
-  emptySub: { fontFamily: Fonts.body, fontSize: 13, color: Colors.muted },
-
-  grid: { paddingBottom: 100 },
-  gridInner: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, paddingHorizontal: 20 },
-
-  card: {
-    width: CARD_W, backgroundColor: Colors.white, borderRadius: 18,
-    borderWidth: 1, borderColor: Colors.border, overflow: 'hidden', marginBottom: 0,
+  // Product list
+  loadingWrap: { paddingTop: 40, alignItems: 'center' },
+  prodList: { paddingHorizontal: 20, gap: 10 },
+  prodCard: {
+    backgroundColor: Colors.white, borderRadius: 16, padding: 18,
+    borderWidth: 1.5, borderColor: Colors.border,
   },
-  cardImg: { width: '100%', height: CARD_W * 1.3, backgroundColor: '#F5F3EE' },
-  saveBtn: {
-    position: 'absolute', top: 10, right: 10,
-    width: 34, height: 34, borderRadius: 17,
-    backgroundColor: 'rgba(0,0,0,0.35)', alignItems: 'center', justifyContent: 'center',
-  },
-  timeBadge: {
-    position: 'absolute', bottom: 60, left: 10,
-    paddingVertical: 3, paddingHorizontal: 10, borderRadius: 8,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-  },
-  timeText: { fontFamily: Fonts.bodySemi, fontSize: 10, color: '#fff' },
+  prodTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
+  prodBrand: { fontFamily: Fonts.body, fontSize: 10, color: Colors.violet, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 },
+  prodName: { fontFamily: Fonts.headingSemi, fontSize: 15, color: Colors.ink, lineHeight: 20 },
+  prodPrice: { fontFamily: Fonts.heading, fontSize: 17, color: Colors.ink, marginLeft: 12 },
+  prodDesc: { fontFamily: Fonts.body, fontSize: 12, color: Colors.muted, lineHeight: 18, marginBottom: 12 },
+  prodBottom: { flexDirection: 'row', alignItems: 'center' },
+  prodCatBadge: { backgroundColor: '#F7F5FB', paddingVertical: 3, paddingHorizontal: 10, borderRadius: 8, marginRight: 8 },
+  prodCatText: { fontFamily: Fonts.bodyMedium, fontSize: 10, color: Colors.ink, textTransform: 'capitalize' },
+  prodRetailer: { fontFamily: Fonts.body, fontSize: 10, color: Colors.muted, flex: 1 },
+  prodLinkRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  prodLink: { fontFamily: Fonts.bodySemi, fontSize: 12, color: Colors.violet },
 
-  cardInfo: { padding: 12 },
-  cardName: { fontFamily: Fonts.bodySemi, fontSize: 13, color: Colors.ink, marginBottom: 6 },
-  cardMeta: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  cardSaves: { fontFamily: Fonts.body, fontSize: 11, color: Colors.muted },
-  typeTag: { backgroundColor: '#F7F5FB', paddingVertical: 3, paddingHorizontal: 8, borderRadius: 8 },
-  typeTagText: { fontFamily: Fonts.bodySemi, fontSize: 10, color: Colors.violet },
+  emptyText: { fontFamily: Fonts.body, fontSize: 13, color: Colors.muted, textAlign: 'center', paddingTop: 24 },
 });

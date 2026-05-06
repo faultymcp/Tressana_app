@@ -121,6 +121,29 @@ const QUIZ_STEPS = [
       { value: 'damage', label: 'Repair damage', desc: 'Recover from heat or colour damage' },
     ],
   },
+  // ═══════════════════════════════════════════════════════════════
+  // NEW STEP 8: Hair situation / segments
+  // ═══════════════════════════════════════════════════════════════
+  {
+    id: 'segments', question: 'What describes your hair right now?', subtitle: 'Select all that apply. This personalises your routine.', multi: true, showPattern: false,
+    proTip: "Your routine adapts to your current situation, not just your hair type. Someone with braids gets completely different care steps than someone wearing their natural texture.",
+    helpTitle: 'Why this matters',
+    helpBody: "Hair care is not one-size-fits-all. Someone with braids needs scalp care between the braids, not deep conditioning. Someone post-transplant needs graft protection, not styling tips. Someone going through chemotherapy needs gentle scalp comfort, not curl definition. This step ensures your routine actually matches your reality.",
+    options: [
+      { value: 'natural', label: 'Wearing my natural texture', desc: 'No current protective style or extensions' },
+      { value: 'braids', label: 'Braids', desc: 'Box braids, cornrows, knotless, micro braids' },
+      { value: 'sewn_in', label: 'Sewn-in extensions or weave', desc: 'Weaves, sew-ins, bonded tracks' },
+      { value: 'clip_in', label: 'Clip-in extensions', desc: 'Temporary clip-in pieces' },
+      { value: 'wig', label: 'Wigs', desc: 'Lace fronts, full wigs, U-part wigs' },
+      { value: 'locs', label: 'Locs', desc: 'Dreadlocks, sisterlocks, faux locs' },
+      { value: 'relaxed', label: 'Relaxed or permed', desc: 'Chemically straightened hair' },
+      { value: 'colour_treated', label: 'Colour treated', desc: 'Bleached, dyed, or highlighted' },
+      { value: 'heat_styled', label: 'Regular heat styling', desc: 'Frequent flat iron, blow dryer, curling iron' },
+      { value: 'transplant', label: 'Hair transplant', desc: 'Post-transplant recovery or maintenance' },
+      { value: 'postpartum', label: 'Postpartum', desc: 'Experiencing postpartum hair changes or loss' },
+      { value: 'medical', label: 'Medical hair loss', desc: 'Chemotherapy, alopecia, or other medical treatment' },
+    ],
+  },
 ];
 
 const SUBTYPES: Record<string, { value: string; label: string; desc: string }[]> = {
@@ -181,8 +204,19 @@ export default function QuizScreen() {
     if (idx < steps.length - 1) {
       setIdx(i => i + 1);
     } else {
-      // Save quiz answers and go straight to results — no auth
+      // Save quiz answers including segments
       const hairType = (answers.subtype as string) || ((answers.curl as string) || '') + 'A';
+      const segments = (answers.segments as string[]) || ['natural'];
+
+      // Auto-add goals based on segments for smarter routing
+      const autoGoals = [...((answers.goals as string[]) || [])];
+      if (segments.includes('postpartum') && !autoGoals.includes('growth')) {
+        autoGoals.push('growth');
+      }
+      if (segments.includes('transplant') && !autoGoals.includes('growth')) {
+        autoGoals.push('growth');
+      }
+
       const quizResults = {
         hairType,
         curl: answers.curl,
@@ -190,9 +224,28 @@ export default function QuizScreen() {
         porosity: answers.porosity || 'unsure',
         scalp: answers.scalp || [],
         history: answers.history || [],
-        goals: answers.goals || [],
+        goals: autoGoals,
+        segments,  // NEW — drives segment-specific routines
       };
       await AsyncStorage.setItem('tressana_quiz', JSON.stringify(quizResults));
+
+      // Award XP for completing quiz
+      try {
+        const { supabase } = require('@/lib/supabase');
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          await supabase.rpc('award_xp', {
+            p_user_id: user.id,
+            p_action: 'complete_quiz',
+            p_reference_id: null,
+            p_description: 'Completed hair discovery quiz',
+            p_override_amount: null,
+          });
+        }
+      } catch (e) {
+        // XP award is non-critical
+      }
+
       router.replace('/reveal');
     }
   }, [idx, steps.length, answers, router]);
@@ -207,7 +260,7 @@ export default function QuizScreen() {
       {/* Nav bar */}
       <View style={$.nav}>
         <Pressable onPress={handleBack} style={$.backBtn}>
-          <Text style={$.backArrow}>‹</Text>
+          <Text style={$.backArrow}>{'\u2039'}</Text>
         </Pressable>
         <View style={$.progressTrack}>
           <LinearGradient
@@ -278,15 +331,15 @@ export default function QuizScreen() {
                   style={[$.opt, sel && $.optSel]}
                 >
                   {/* Curl illustration for main curl step */}
-                  {step.showPattern && step.id === 'curl' && (
+                  {step.id === 'curl' && (
                     <View style={[$.optStrand, sel && $.optStrandSel]}>
-                      <CurlPattern type={opt.value} size={56} color={sel ? Colors.violet : Colors.ink} />
+                      <CurlPattern type={opt.value} size={54} color={sel ? Colors.violet : Colors.muted} />
                     </View>
                   )}
 
                   {/* Selection indicator */}
                   <View style={[$.indicator, sel && $.indicatorOn]}>
-                    {sel && <Text style={$.indicatorCheck}>✓</Text>}
+                    {sel && <Text style={$.indicatorCheck}>{'\u2713'}</Text>}
                   </View>
 
                   {/* Text */}
@@ -304,16 +357,12 @@ export default function QuizScreen() {
       {/* Footer */}
       <View style={$.footer}>
         <Pressable
-          onPress={handleNext}
+          onPress={canContinue ? handleNext : undefined}
           disabled={!canContinue}
-          style={({ pressed }) => [
-            $.nextBtn,
-            !canContinue && $.nextBtnOff,
-            pressed && canContinue && $.nextBtnPress,
-          ]}
+          style={({ pressed }) => [$.nextBtn, !canContinue && $.nextBtnOff, pressed && canContinue && $.nextBtnPress]}
         >
           <LinearGradient
-            colors={canContinue ? (Colors.gradientPrimary as [string, string]) : (['#D1D1D6', '#D1D1D6'] as [string, string])}
+            colors={canContinue ? [Colors.violet, Colors.pink] as any : ['#E0DCD5', '#E0DCD5'] as any}
             start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
             style={$.nextInner}
           >
@@ -324,35 +373,35 @@ export default function QuizScreen() {
         </Pressable>
       </View>
 
-      {/* Help bottom sheet */}
-      <Modal visible={showHelp} transparent animationType="slide" onRequestClose={() => setShowHelp(false)}>
+      {/* Help Sheet */}
+      <Modal visible={showHelp} transparent animationType="slide">
         <Pressable style={$.sheetOverlay} onPress={() => setShowHelp(false)}>
-          <Pressable style={$.sheet} onPress={e => e.stopPropagation()}>
+          <View style={$.sheet} onStartShouldSetResponder={() => true}>
             <View style={$.sheetHandle} />
             <View style={$.sheetHeader}>
               <Text style={$.sheetTitle}>{step.helpTitle}</Text>
-              <Pressable onPress={() => setShowHelp(false)} hitSlop={12}>
-                <Text style={$.sheetClose}>✕</Text>
+              <Pressable onPress={() => setShowHelp(false)}>
+                <Text style={$.sheetClose}>{'\u00d7'}</Text>
               </Pressable>
             </View>
             <ScrollView showsVerticalScrollIndicator={false}>
               <Text style={$.sheetBody}>{step.helpBody}</Text>
 
-              {/* Visual guide for curl step */}
+              {/* Visual guide for curl types */}
               {step.id === 'curl' && (
                 <View style={$.guideSection}>
                   <Text style={$.guideTitle}>Visual guide</Text>
                   {[
-                    { type: '1', name: 'Type 1 — Straight', desc: 'Falls flat with no curl' },
-                    { type: '2', name: 'Type 2 — Wavy', desc: 'S-shaped bends and flowing curves' },
-                    { type: '3', name: 'Type 3 — Curly', desc: 'Defined spirals that bounce back' },
-                    { type: '4', name: 'Type 4 — Coily', desc: 'Tight coils or zig-zag pattern' },
+                    { type: '1', name: 'Type 1 — Straight', desc: 'No curl pattern at all' },
+                    { type: '2', name: 'Type 2 — Wavy', desc: 'S-shaped bends' },
+                    { type: '3', name: 'Type 3 — Curly', desc: 'Defined spirals and ringlets' },
+                    { type: '4', name: 'Type 4 — Coily', desc: 'Tight coils and zig-zags' },
                   ].map(g => (
                     <View key={g.type} style={$.guideRow}>
                       <View style={$.guidePatternBox}>
                         <CurlPattern type={g.type} size={50} color={Colors.violet} />
                       </View>
-                      <View style={{ flex: 1 }}>
+                      <View style={{ flex: 1, gap: 2 }}>
                         <Text style={$.guideName}>{g.name}</Text>
                         <Text style={$.guideDesc}>{g.desc}</Text>
                       </View>
@@ -361,7 +410,7 @@ export default function QuizScreen() {
                 </View>
               )}
             </ScrollView>
-          </Pressable>
+          </View>
         </Pressable>
       </Modal>
     </View>
@@ -371,33 +420,27 @@ export default function QuizScreen() {
 // ─── Styles ──────────────────────────────────────────────────────
 const $ = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.porcelain },
-
-  // Nav
   nav: {
-    flexDirection: 'row', alignItems: 'center',
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    paddingHorizontal: 20,
     paddingTop: Platform.OS === 'ios' ? 58 : 44,
-    paddingHorizontal: 20, paddingBottom: 14, gap: 12,
+    paddingBottom: 12,
   },
-  backBtn: {
-    width: 38, height: 38, borderRadius: 19,
-    backgroundColor: Colors.white, borderWidth: 1.5, borderColor: Colors.border,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  backArrow: { fontSize: 26, color: Colors.ink, marginTop: -2 },
-  progressTrack: { flex: 1, height: 4, backgroundColor: Colors.border, borderRadius: 2, overflow: 'hidden' },
-  progressFill: { height: '100%', borderRadius: 2 },
-  stepNum: { fontFamily: Fonts.bodyMedium, fontSize: 12, color: Colors.muted, minWidth: 28, textAlign: 'right' },
+  backBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.white, borderWidth: 1.5, borderColor: Colors.border, alignItems: 'center', justifyContent: 'center' },
+  backArrow: { fontSize: 22, color: Colors.ink, marginTop: -2, marginLeft: -1 },
+  progressTrack: { flex: 1, height: 6, borderRadius: 3, backgroundColor: Colors.border, overflow: 'hidden' },
+  progressFill: { height: '100%', borderRadius: 3 },
+  stepNum: { fontFamily: Fonts.bodyMedium, fontSize: 12, color: Colors.muted, width: 32, textAlign: 'right' },
 
-  // Content
-  scroll: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 24 },
+  scroll: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 30 },
 
+  // Question
   qRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 14 },
-  question: { fontFamily: Fonts.heading, fontSize: 21, color: Colors.ink, letterSpacing: -0.3, lineHeight: 27 },
-  qSub: { fontFamily: Fonts.body, fontSize: 13, color: Colors.muted, lineHeight: 19, marginTop: 5 },
-
+  question: { fontFamily: Fonts.heading, fontSize: 22, color: Colors.ink, letterSpacing: -0.5, lineHeight: 28 },
+  qSub: { fontFamily: Fonts.body, fontSize: 13, color: Colors.muted, marginTop: 4, lineHeight: 19 },
   helpBtn: {
-    width: 36, height: 36, borderRadius: 18,
-    backgroundColor: Colors.violetBg, borderWidth: 1.5, borderColor: Colors.violetBg2,
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: Colors.white, borderWidth: 1.5, borderColor: Colors.border,
     alignItems: 'center', justifyContent: 'center', marginTop: 2,
   },
   helpBtnText: { fontFamily: Fonts.headingSemi, fontSize: 15, color: Colors.violet },
@@ -462,7 +505,6 @@ const $ = StyleSheet.create({
     elevation: 3,
   },
 
-  // Curl strand illustration in option
   optStrand: {
     width: 50, height: 64, borderRadius: 12,
     backgroundColor: '#F7F5FB',
@@ -470,7 +512,6 @@ const $ = StyleSheet.create({
   },
   optStrandSel: { backgroundColor: '#F0EBFA' },
 
-  // Selection indicator
   indicator: {
     width: 24, height: 24, borderRadius: 12,
     borderWidth: 2, borderColor: Colors.border,

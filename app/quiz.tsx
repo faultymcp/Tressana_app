@@ -1,13 +1,19 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, Pressable, ScrollView, Platform, Modal,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
+import * as Haptics from 'expo-haptics';
 import Svg, { Path } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { Colors, Fonts, Radius } from '@/constants/theme';
-import Animated, { FadeInUp } from 'react-native-reanimated';
+import QuizSegmentStep, { SEGMENTS } from '@/components/QuizSegmentStep';
+import JourneyMap, { Phase } from '@/components/JourneyMap';
+import {
+  PatternLineup,
+  CuticleStrands,
+} from '@/components/InterstitialVisuals';
 
 // ─── SVG Curl Pattern ────────────────────────────────────────────
 function CurlPattern({ type, size = 62, color }: { type: string; size?: number; color?: string }) {
@@ -36,9 +42,42 @@ function CurlPattern({ type, size = 62, color }: { type: string; size?: number; 
   );
 }
 
-// ─── Quiz Data ───────────────────────────────────────────────────
-const QUIZ_STEPS = [
+// ─── Step types ──────────────────────────────────────────────────
+type QuestionStep = {
+  kind: 'question';
+  id: string;
+  question: string;
+  subtitle: string;
+  multi: boolean;
+  showPattern: boolean;
+  proTip: string;
+  helpTitle: string;
+  helpBody: string;
+  options: { value: string; label: string; desc: string }[];
+};
+
+type InterstitialStep = {
+  kind: 'interstitial';
+  id: 'why_pattern' | 'why_porosity' | 'why_history' | 'almost';
+  title: string;
+  body: string;
+};
+
+type SegmentsStep = {
+  kind: 'segments';
+  id: 'segments';
+  question: string;
+  subtitle: string;
+  helpTitle: string;
+  helpBody: string;
+};
+
+type Step = QuestionStep | InterstitialStep | SegmentsStep;
+
+// ─── Quiz steps ──────────────────────────────────────────────────
+const QUIZ_STEPS: Step[] = [
   {
+    kind: 'question',
     id: 'strand', question: "Let\u2019s find your curl pattern", subtitle: 'Before we start, grab a single strand.', multi: false, showPattern: false,
     proTip: "Separate a few strands from your crown \u2014 that\u2019s your most natural texture. Clean, dry, product-free.",
     helpTitle: 'Why a single strand?',
@@ -49,6 +88,7 @@ const QUIZ_STEPS = [
     ],
   },
   {
+    kind: 'question',
     id: 'curl', question: 'What does your strand do naturally?', subtitle: 'Hold it at one end and let it hang.', multi: false, showPattern: true,
     proTip: "Don\u2019t stretch it \u2014 let gravity do the work. Watch root to tip.",
     helpTitle: 'Reading your strand',
@@ -61,13 +101,24 @@ const QUIZ_STEPS = [
     ],
   },
   {
+    kind: 'question',
     id: 'subtype', question: 'How tight is the pattern?', subtitle: 'Compare your curl to an everyday object.', multi: false, showPattern: true,
     proTip: "Which object matches the curl size closest?",
     helpTitle: 'The A-B-C system',
     helpBody: "A is loosest, C is tightest. This isn\u2019t about what\u2019s better \u2014 it\u2019s about what your hair needs. Tighter patterns need more moisture. Looser patterns need less weight.",
     options: [],
   },
+
+  // ── INTERSTITIAL 1 ───────────────────────────────────────────────
   {
+    kind: 'interstitial',
+    id: 'why_pattern',
+    title: "It\u2019s structure, not a score.",
+    body: "Tighter coils carry less moisture. Looser ones can\u2019t carry weight. We use pattern to match \u2014 not to rank.",
+  },
+
+  {
+    kind: 'question',
     id: 'porosity', question: 'How does water behave on your hair?', subtitle: 'Think about what happens when it gets wet.', multi: false, showPattern: false,
     proTip: "Does it take forever to get fully wet? Does it dry in minutes or hours?",
     helpTitle: 'The water glass test',
@@ -79,7 +130,17 @@ const QUIZ_STEPS = [
       { value: 'unsure', label: 'Not sure yet', desc: "We\u2019ll help you figure this out." },
     ],
   },
+
+  // ── INTERSTITIAL 2 ───────────────────────────────────────────────
   {
+    kind: 'interstitial',
+    id: 'why_porosity',
+    title: "Porosity decides what your hair holds.",
+    body: "Most product mismatches come down to this single variable.",
+  },
+
+  {
+    kind: 'question',
     id: 'scalp', question: "Now let\u2019s talk about your scalp", subtitle: "Healthy hair starts at the root.", multi: true, showPattern: false,
     proTip: "Part your hair and look in a mirror. Touch it \u2014 what do you notice?",
     helpTitle: 'Why scalp health matters',
@@ -94,6 +155,7 @@ const QUIZ_STEPS = [
     ],
   },
   {
+    kind: 'question',
     id: 'history', question: 'What has your hair been through?', subtitle: "No judgment \u2014 helps us understand what it needs.", multi: true, showPattern: false,
     proTip: "Be honest \u2014 past treatments affect what works today.",
     helpTitle: 'Why history matters',
@@ -107,7 +169,27 @@ const QUIZ_STEPS = [
       { value: 'transitioning', label: 'Currently transitioning', desc: 'Growing out chemical treatment' },
     ],
   },
+
+  // ── INTERSTITIAL 3 ───────────────────────────────────────────────
   {
+    kind: 'interstitial',
+    id: 'why_history',
+    title: "Your history shapes what works.",
+    body: "We don\u2019t ask to flag damage. We ask so what we recommend fits the hair you have, not the hair someone else thinks you should have.",
+  },
+
+  // ── SEGMENTS (before goals) ──────────────────────────────────────
+  {
+    kind: 'segments',
+    id: 'segments',
+    question: 'What describes your hair right now?',
+    subtitle: 'Select all that apply. Your routine adapts to your current situation, not just your hair type.',
+    helpTitle: 'Why this matters',
+    helpBody: "Hair care is not one-size-fits-all. Someone with braids needs scalp care between the braids, not deep conditioning. Someone post-transplant needs graft protection, not styling tips. Someone going through chemotherapy needs gentle scalp comfort, not curl definition.",
+  },
+
+  {
+    kind: 'question',
     id: 'goals', question: 'What matters most to you?', subtitle: "Pick all that apply \u2014 we\u2019ll build your plan around these.", multi: true, showPattern: false,
     proTip: "Pick your top 2\u20133. We\u2019ll prioritise them in your routine.",
     helpTitle: 'How goals shape your plan',
@@ -121,28 +203,13 @@ const QUIZ_STEPS = [
       { value: 'damage', label: 'Repair damage', desc: 'Recover from heat or colour damage' },
     ],
   },
-  // ═══════════════════════════════════════════════════════════════
-  // NEW STEP 8: Hair situation / segments
-  // ═══════════════════════════════════════════════════════════════
+
+  // ── INTERSTITIAL 4 ───────────────────────────────────────────────
   {
-    id: 'segments', question: 'What describes your hair right now?', subtitle: 'Select all that apply. This personalises your routine.', multi: true, showPattern: false,
-    proTip: "Your routine adapts to your current situation, not just your hair type. Someone with braids gets completely different care steps than someone wearing their natural texture.",
-    helpTitle: 'Why this matters',
-    helpBody: "Hair care is not one-size-fits-all. Someone with braids needs scalp care between the braids, not deep conditioning. Someone post-transplant needs graft protection, not styling tips. Someone going through chemotherapy needs gentle scalp comfort, not curl definition. This step ensures your routine actually matches your reality.",
-    options: [
-      { value: 'natural', label: 'Wearing my natural texture', desc: 'No current protective style or extensions' },
-      { value: 'braids', label: 'Braids', desc: 'Box braids, cornrows, knotless, micro braids' },
-      { value: 'sewn_in', label: 'Sewn-in extensions or weave', desc: 'Weaves, sew-ins, bonded tracks' },
-      { value: 'clip_in', label: 'Clip-in extensions', desc: 'Temporary clip-in pieces' },
-      { value: 'wig', label: 'Wigs', desc: 'Lace fronts, full wigs, U-part wigs' },
-      { value: 'locs', label: 'Locs', desc: 'Dreadlocks, sisterlocks, faux locs' },
-      { value: 'relaxed', label: 'Relaxed or permed', desc: 'Chemically straightened hair' },
-      { value: 'colour_treated', label: 'Colour treated', desc: 'Bleached, dyed, or highlighted' },
-      { value: 'heat_styled', label: 'Regular heat styling', desc: 'Frequent flat iron, blow dryer, curling iron' },
-      { value: 'transplant', label: 'Hair transplant', desc: 'Post-transplant recovery or maintenance' },
-      { value: 'postpartum', label: 'Postpartum', desc: 'Experiencing postpartum hair changes or loss' },
-      { value: 'medical', label: 'Medical hair loss', desc: 'Chemotherapy, alopecia, or other medical treatment' },
-    ],
+    kind: 'interstitial',
+    id: 'almost',
+    title: "Your routine is loading.",
+    body: "Built from your texture, scalp, story, and what you want next. Yours to swap. Ours to adjust.",
   },
 ];
 
@@ -169,6 +236,34 @@ const SUBTYPES: Record<string, { value: string; label: string; desc: string }[]>
   ],
 };
 
+// ─── Phase mapping ───────────────────────────────────────────────
+function phaseForStep(idx: number): Phase {
+  if (idx <= 3) return 'texture';
+  if (idx <= 6) return 'scalp';
+  if (idx <= 9) return 'story';
+  return 'plan';
+}
+const PHASE_ORDER: Phase[] = ['texture', 'scalp', 'story', 'plan'];
+function completedBefore(phase: Phase): Phase[] {
+  return PHASE_ORDER.slice(0, PHASE_ORDER.indexOf(phase));
+}
+
+// Returns 1-based interstitial index ("01", "02", "03", "04") for the given step index.
+function interstitialNumber(idx: number): string {
+  let n = 0;
+  for (let i = 0; i <= idx; i++) {
+    if (QUIZ_STEPS[i].kind === 'interstitial') n++;
+  }
+  return n.toString().padStart(2, '0');
+}
+
+// ════════════════════════════════════════════════════════════════
+// Interstitials use the animated visuals from components/InterstitialVisuals.tsx.
+// Each is framed by a section index and editorial title above, body below.
+// Interstitial 4 uses no visual — the JourneyMap at the top of the screen
+// already shows all phases complete.
+// ════════════════════════════════════════════════════════════════
+
 // ─── Component ───────────────────────────────────────────────────
 export default function QuizScreen() {
   const router = useRouter();
@@ -177,11 +272,24 @@ export default function QuizScreen() {
   const [showHelp, setShowHelp] = useState(false);
 
   const mainType = (answers.curl as string) || '';
-  const steps = QUIZ_STEPS.map(s => s.id === 'subtype' && mainType ? { ...s, options: SUBTYPES[mainType] || [] } : s);
+
+  const steps = useMemo(() =>
+    QUIZ_STEPS.map(s => {
+      if (s.kind === 'question' && s.id === 'subtype' && mainType) {
+        return { ...s, options: SUBTYPES[mainType] || [] };
+      }
+      return s;
+    }),
+    [mainType]
+  );
+
   const step = steps[idx];
-  const progress = ((idx + 1) / steps.length) * 100;
+  const currentPhase = phaseForStep(idx);
+  const completed = completedBefore(currentPhase);
 
   const select = (val: string) => {
+    if (step.kind !== 'question') return;
+    Haptics.selectionAsync().catch(() => {});
     if (step.multi) {
       const cur = (answers[step.id] as string[]) || [];
       setAnswers(a => ({ ...a, [step.id]: cur.includes(val) ? cur.filter(v => v !== val) : [...cur, val] }));
@@ -190,86 +298,96 @@ export default function QuizScreen() {
     }
   };
 
+  const setSegments = (next: string[]) => {
+    setAnswers(a => ({ ...a, segments: next }));
+  };
+
   const isSelected = (val: string) => {
+    if (step.kind !== 'question') return false;
     const a = answers[step.id];
     return Array.isArray(a) ? a.includes(val) : a === val;
   };
 
-  const canContinue = step.multi
-    ? ((answers[step.id] as string[])?.length > 0)
-    : !!answers[step.id];
+  const canContinue = (() => {
+    if (step.kind === 'interstitial') return true;
+    if (step.kind === 'segments') return ((answers.segments as string[])?.length ?? 0) > 0;
+    if (step.multi) return ((answers[step.id] as string[])?.length ?? 0) > 0;
+    return !!answers[step.id];
+  })();
+
+  const finish = useCallback(async () => {
+    const hairType = (answers.subtype as string) || ((answers.curl as string) || '') + 'A';
+    const segments = (answers.segments as string[]) || ['natural'];
+
+    const autoGoals = [...((answers.goals as string[]) || [])];
+    if (segments.includes('postpartum') && !autoGoals.includes('growth')) autoGoals.push('growth');
+    if (segments.includes('transplant') && !autoGoals.includes('growth')) autoGoals.push('growth');
+
+    const quizResults = {
+      hairType,
+      curl: answers.curl,
+      subtype: answers.subtype,
+      porosity: answers.porosity || 'unsure',
+      scalp: answers.scalp || [],
+      history: answers.history || [],
+      goals: autoGoals,
+      segments,
+    };
+    await AsyncStorage.setItem('tressana_quiz', JSON.stringify(quizResults));
+
+    try {
+      const { supabase } = require('@/lib/supabase');
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase.rpc('award_xp', {
+          p_user_id: user.id,
+          p_action: 'complete_quiz',
+          p_reference_id: null,
+          p_description: 'Completed hair discovery quiz',
+          p_override_amount: null,
+        });
+      }
+    } catch (e) {
+      // intentional silent
+    }
+
+    router.replace('/reveal');
+  }, [answers, router]);
 
   const handleNext = useCallback(async () => {
     setShowHelp(false);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     if (idx < steps.length - 1) {
       setIdx(i => i + 1);
     } else {
-      // Save quiz answers including segments
-      const hairType = (answers.subtype as string) || ((answers.curl as string) || '') + 'A';
-      const segments = (answers.segments as string[]) || ['natural'];
-
-      // Auto-add goals based on segments for smarter routing
-      const autoGoals = [...((answers.goals as string[]) || [])];
-      if (segments.includes('postpartum') && !autoGoals.includes('growth')) {
-        autoGoals.push('growth');
-      }
-      if (segments.includes('transplant') && !autoGoals.includes('growth')) {
-        autoGoals.push('growth');
-      }
-
-      const quizResults = {
-        hairType,
-        curl: answers.curl,
-        subtype: answers.subtype,
-        porosity: answers.porosity || 'unsure',
-        scalp: answers.scalp || [],
-        history: answers.history || [],
-        goals: autoGoals,
-        segments,  // NEW — drives segment-specific routines
-      };
-      await AsyncStorage.setItem('tressana_quiz', JSON.stringify(quizResults));
-
-      // Award XP for completing quiz
-      try {
-        const { supabase } = require('@/lib/supabase');
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          await supabase.rpc('award_xp', {
-            p_user_id: user.id,
-            p_action: 'complete_quiz',
-            p_reference_id: null,
-            p_description: 'Completed hair discovery quiz',
-            p_override_amount: null,
-          });
-        }
-      } catch (e) {
-        // XP award is non-critical
-      }
-
-      router.replace('/reveal');
+      await finish();
     }
-  }, [idx, steps.length, answers, router]);
+  }, [idx, steps.length, finish]);
 
   const handleBack = () => {
     setShowHelp(false);
-    idx > 0 ? setIdx(i => i - 1) : router.back();
+    if (idx > 0) {
+      Haptics.selectionAsync().catch(() => {});
+      setIdx(i => i - 1);
+    } else {
+      router.back();
+    }
   };
+
+  const ctaLabel = step.kind === 'interstitial'
+    ? (idx === steps.length - 1 ? 'See my routine' : 'Continue')
+    : (idx === steps.length - 1 ? 'See my results' : 'Continue');
 
   return (
     <View style={$.container}>
-      {/* Nav bar */}
+      {/* Top nav with journey map — single source of progress */}
       <View style={$.nav}>
         <Pressable onPress={handleBack} style={$.backBtn}>
           <Text style={$.backArrow}>{'\u2039'}</Text>
         </Pressable>
-        <View style={$.progressTrack}>
-          <LinearGradient
-            colors={[Colors.lime, Colors.violet]}
-            start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-            style={[$.progressFill, { width: `${progress}%` }]}
-          />
+        <View style={$.mapWrap}>
+          <JourneyMap currentPhase={currentPhase} completedPhases={completed} compact />
         </View>
-        <Text style={$.stepNum}>{idx + 1}/{steps.length}</Text>
       </View>
 
       <ScrollView
@@ -277,165 +395,172 @@ export default function QuizScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Question */}
-        <Animated.View key={`q-${step.id}-${idx}`} entering={FadeInUp.duration(300)}>
-          <View style={$.qRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={$.question}>{step.question}</Text>
-              <Text style={$.qSub}>{step.subtitle}</Text>
+        {step.kind === 'interstitial' ? (
+          // ─────────────────────────────────────────────────────────────
+          // Editorial layout: section index, big confident title, body,
+          // one typographic flourish below (or none, for the closer).
+          // No badges, no pills, no illustrations.
+          // ─────────────────────────────────────────────────────────────
+          <Animated.View
+            key={`int-${step.id}-${idx}`}
+            entering={FadeIn.duration(480)}
+            exiting={FadeOut.duration(180)}
+            style={$.interstitial}
+          >
+            <Text style={$.intIndex}>{interstitialNumber(idx)}  /  04</Text>
+            <Text style={$.intTitle}>{step.title}</Text>
+            <Text style={$.intBody}>{step.body}</Text>
+
+            {step.id === 'why_pattern'  && <PatternLineup selectedType={(answers.subtype as string) || ''} />}
+            {step.id === 'why_porosity' && <CuticleStrands />}
+            {/* why_history: deliberately no visual — restraint is the gesture */}
+            {/* almost: no visual — JourneyMap at top already shows completion */}
+          </Animated.View>
+        ) : step.kind === 'segments' ? (
+          <Animated.View key={`seg-${idx}`} entering={FadeIn.duration(280)}>
+            <View style={$.qRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={$.question}>{step.question}</Text>
+                <Text style={$.qSub}>{step.subtitle}</Text>
+              </View>
+              <Pressable onPress={() => setShowHelp(true)} style={$.helpBtn}>
+                <Text style={$.helpBtnText}>?</Text>
+              </Pressable>
             </View>
-            <Pressable onPress={() => setShowHelp(true)} style={$.helpBtn}>
-              <Text style={$.helpBtnText}>?</Text>
-            </Pressable>
-          </View>
+            <Text style={$.multiLabel}>Select all that apply</Text>
+            <QuizSegmentStep
+              selected={(answers.segments as string[]) || []}
+              onSelect={setSegments}
+            />
+          </Animated.View>
+        ) : (
+          <Animated.View key={`q-${step.id}-${idx}`} entering={FadeIn.duration(280)}>
+            <View style={$.qRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={$.question}>{step.question}</Text>
+                <Text style={$.qSub}>{step.subtitle}</Text>
+              </View>
+              <Pressable onPress={() => setShowHelp(true)} style={$.helpBtn}>
+                <Text style={$.helpBtnText}>?</Text>
+              </Pressable>
+            </View>
 
-          {/* Pro tip */}
-          <View style={$.tip}>
-            <View style={$.tipBadge}><Text style={$.tipBadgeText}>PRO TIP</Text></View>
             <Text style={$.tipText}>{step.proTip}</Text>
-          </View>
 
-          {step.multi && <Text style={$.multiLabel}>Select all that apply</Text>}
-        </Animated.View>
+            {step.multi && <Text style={$.multiLabel}>Select all that apply</Text>}
 
-        {/* Subtype pattern chart */}
-        {step.id === 'subtype' && mainType && (
-          <Animated.View entering={FadeInUp.delay(50).duration(300)} style={$.chartRow}>
-            {(SUBTYPES[mainType] || []).map(opt => {
-              const active = isSelected(opt.value);
-              return (
-                <Pressable
-                  key={opt.value}
-                  onPress={() => select(opt.value)}
-                  style={[$.chartItem, active && $.chartItemActive]}
-                >
-                  <View style={[$.chartPatternBox, active && $.chartPatternBoxActive]}>
-                    <CurlPattern type={opt.value} size={54} color={active ? Colors.violet : Colors.muted} />
-                  </View>
-                  <Text style={[$.chartLabel, active && $.chartLabelActive]}>{opt.value}</Text>
-                  <Text style={[$.chartDesc, active && $.chartDescActive]} numberOfLines={2}>{opt.label}</Text>
-                </Pressable>
-              );
-            })}
+            {step.id === 'subtype' && mainType && (
+              <View style={$.chartRow}>
+                {(SUBTYPES[mainType] || []).map(opt => {
+                  const active = isSelected(opt.value);
+                  return (
+                    <Pressable
+                      key={opt.value}
+                      onPress={() => select(opt.value)}
+                      style={[$.chartItem, active && $.chartItemActive]}
+                    >
+                      <View style={[$.chartPatternBox, active && $.chartPatternBoxActive]}>
+                        <CurlPattern type={opt.value} size={54} color={active ? Colors.violet : Colors.muted} />
+                      </View>
+                      <Text style={[$.chartLabel, active && $.chartLabelActive]}>{opt.value}</Text>
+                      <Text style={[$.chartDesc, active && $.chartDescActive]} numberOfLines={2}>{opt.label}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            )}
+
+            <View style={$.opts}>
+              {step.options.map((opt) => {
+                const sel = isSelected(opt.value);
+                return (
+                  <Pressable
+                    key={opt.value}
+                    onPress={() => select(opt.value)}
+                    style={({ pressed }) => [$.opt, sel && $.optSel, pressed && $.optPressed]}
+                  >
+                    {step.id === 'curl' && (
+                      <View style={[$.optStrand, sel && $.optStrandSel]}>
+                        <CurlPattern type={opt.value} size={54} color={sel ? Colors.violet : Colors.muted} />
+                      </View>
+                    )}
+
+                    <View style={[$.indicator, sel && $.indicatorOn]}>
+                      {sel && <Text style={$.indicatorCheck}>{'\u2713'}</Text>}
+                    </View>
+
+                    <View style={$.optBody}>
+                      <Text style={[$.optLabel, sel && $.optLabelSel]}>{opt.label}</Text>
+                      <Text style={$.optDesc}>{opt.desc}</Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
           </Animated.View>
         )}
-
-        {/* Options */}
-        <View style={$.opts}>
-          {step.options.map((opt, i) => {
-            const sel = isSelected(opt.value);
-            return (
-              <Animated.View key={opt.value} entering={FadeInUp.delay(50 * i).duration(250)}>
-                <Pressable
-                  onPress={() => select(opt.value)}
-                  style={[$.opt, sel && $.optSel]}
-                >
-                  {/* Curl illustration for main curl step */}
-                  {step.id === 'curl' && (
-                    <View style={[$.optStrand, sel && $.optStrandSel]}>
-                      <CurlPattern type={opt.value} size={54} color={sel ? Colors.violet : Colors.muted} />
-                    </View>
-                  )}
-
-                  {/* Selection indicator */}
-                  <View style={[$.indicator, sel && $.indicatorOn]}>
-                    {sel && <Text style={$.indicatorCheck}>{'\u2713'}</Text>}
-                  </View>
-
-                  {/* Text */}
-                  <View style={$.optBody}>
-                    <Text style={[$.optLabel, sel && $.optLabelSel]}>{opt.label}</Text>
-                    <Text style={$.optDesc}>{opt.desc}</Text>
-                  </View>
-                </Pressable>
-              </Animated.View>
-            );
-          })}
-        </View>
       </ScrollView>
 
-      {/* Footer */}
+      {/* Footer CTA — solid violet, no gradient */}
       <View style={$.footer}>
         <Pressable
           onPress={canContinue ? handleNext : undefined}
           disabled={!canContinue}
-          style={({ pressed }) => [$.nextBtn, !canContinue && $.nextBtnOff, pressed && canContinue && $.nextBtnPress]}
+          style={({ pressed }) => [
+            $.nextBtn,
+            !canContinue && $.nextBtnOff,
+            pressed && canContinue && $.nextBtnPress,
+          ]}
         >
-          <LinearGradient
-            colors={canContinue ? [Colors.violet, Colors.pink] as any : ['#E0DCD5', '#E0DCD5'] as any}
-            start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-            style={$.nextInner}
-          >
-            <Text style={[$.nextLabel, !canContinue && $.nextLabelOff]}>
-              {idx === steps.length - 1 ? 'See my results' : 'Continue'}
-            </Text>
-          </LinearGradient>
+          <Text style={[$.nextLabel, !canContinue && $.nextLabelOff]}>{ctaLabel}</Text>
         </Pressable>
       </View>
 
-      {/* Help Sheet */}
-      <Modal visible={showHelp} transparent animationType="slide">
-        <Pressable style={$.sheetOverlay} onPress={() => setShowHelp(false)}>
-          <View style={$.sheet} onStartShouldSetResponder={() => true}>
-            <View style={$.sheetHandle} />
-            <View style={$.sheetHeader}>
-              <Text style={$.sheetTitle}>{step.helpTitle}</Text>
-              <Pressable onPress={() => setShowHelp(false)}>
-                <Text style={$.sheetClose}>{'\u00d7'}</Text>
-              </Pressable>
+      {/* Help sheet */}
+      {step.kind !== 'interstitial' && (
+        <Modal visible={showHelp} transparent animationType="slide">
+          <Pressable style={$.sheetOverlay} onPress={() => setShowHelp(false)}>
+            <View style={$.sheet} onStartShouldSetResponder={() => true}>
+              <View style={$.sheetHandle} />
+              <View style={$.sheetHeader}>
+                <Text style={$.sheetTitle}>{step.helpTitle}</Text>
+                <Pressable onPress={() => setShowHelp(false)}>
+                  <Text style={$.sheetClose}>{'\u00d7'}</Text>
+                </Pressable>
+              </View>
+              <ScrollView showsVerticalScrollIndicator={false}>
+                <Text style={$.sheetBody}>{step.helpBody}</Text>
+              </ScrollView>
             </View>
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <Text style={$.sheetBody}>{step.helpBody}</Text>
-
-              {/* Visual guide for curl types */}
-              {step.id === 'curl' && (
-                <View style={$.guideSection}>
-                  <Text style={$.guideTitle}>Visual guide</Text>
-                  {[
-                    { type: '1', name: 'Type 1 — Straight', desc: 'No curl pattern at all' },
-                    { type: '2', name: 'Type 2 — Wavy', desc: 'S-shaped bends' },
-                    { type: '3', name: 'Type 3 — Curly', desc: 'Defined spirals and ringlets' },
-                    { type: '4', name: 'Type 4 — Coily', desc: 'Tight coils and zig-zags' },
-                  ].map(g => (
-                    <View key={g.type} style={$.guideRow}>
-                      <View style={$.guidePatternBox}>
-                        <CurlPattern type={g.type} size={50} color={Colors.violet} />
-                      </View>
-                      <View style={{ flex: 1, gap: 2 }}>
-                        <Text style={$.guideName}>{g.name}</Text>
-                        <Text style={$.guideDesc}>{g.desc}</Text>
-                      </View>
-                    </View>
-                  ))}
-                </View>
-              )}
-            </ScrollView>
-          </View>
-        </Pressable>
-      </Modal>
+          </Pressable>
+        </Modal>
+      )}
     </View>
   );
 }
 
-// ─── Styles ──────────────────────────────────────────────────────
+// ─── Screen styles ──────────────────────────────────────────────
 const $ = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.porcelain },
+
   nav: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
     paddingHorizontal: 20,
     paddingTop: Platform.OS === 'ios' ? 58 : 44,
-    paddingBottom: 12,
+    paddingBottom: 14,
   },
-  backBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.white, borderWidth: 1.5, borderColor: Colors.border, alignItems: 'center', justifyContent: 'center' },
+  backBtn: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: Colors.white, borderWidth: 1.5, borderColor: Colors.border,
+    alignItems: 'center', justifyContent: 'center',
+  },
   backArrow: { fontSize: 22, color: Colors.ink, marginTop: -2, marginLeft: -1 },
-  progressTrack: { flex: 1, height: 6, borderRadius: 3, backgroundColor: Colors.border, overflow: 'hidden' },
-  progressFill: { height: '100%', borderRadius: 3 },
-  stepNum: { fontFamily: Fonts.bodyMedium, fontSize: 12, color: Colors.muted, width: 32, textAlign: 'right' },
+  mapWrap: { flex: 1 },
 
-  scroll: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 30 },
+  scroll: { paddingHorizontal: 24, paddingTop: 16, paddingBottom: 30 },
 
-  // Question
-  qRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 14 },
+  // Question header
+  qRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 12 },
   question: { fontFamily: Fonts.heading, fontSize: 22, color: Colors.ink, letterSpacing: -0.5, lineHeight: 28 },
   qSub: { fontFamily: Fonts.body, fontSize: 13, color: Colors.muted, marginTop: 4, lineHeight: 19 },
   helpBtn: {
@@ -445,132 +570,141 @@ const $ = StyleSheet.create({
   },
   helpBtnText: { fontFamily: Fonts.headingSemi, fontSize: 15, color: Colors.violet },
 
-  // Pro tip
-  tip: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 10,
-    padding: 13, borderRadius: 12,
-    backgroundColor: 'rgba(217,255,0,0.05)',
-    borderWidth: 1, borderColor: 'rgba(217,255,0,0.12)',
+  // Pro tip — italic line, no badge no card
+  tipText: {
+    fontFamily: Fonts.body,
+    fontStyle: 'italic',
+    fontSize: 13,
+    color: Colors.muted,
+    lineHeight: 19,
     marginBottom: 18,
   },
-  tipBadge: {
-    backgroundColor: 'rgba(217,255,0,0.2)',
-    paddingVertical: 3, paddingHorizontal: 9, borderRadius: 8, marginTop: 1,
-  },
-  tipBadgeText: { fontFamily: Fonts.bodyBold, fontSize: 8, color: '#5a6b00', letterSpacing: 0.8 },
-  tipText: { fontFamily: Fonts.body, fontSize: 12, color: Colors.ink, lineHeight: 18, flex: 1, opacity: 0.65 },
 
-  multiLabel: { fontFamily: Fonts.bodyMedium, fontSize: 11, color: Colors.violet, marginBottom: 10 },
-
-  // Subtype chart
-  chartRow: {
-    flexDirection: 'row', justifyContent: 'center', gap: 10,
-    padding: 14, marginBottom: 18, borderRadius: 14,
-    backgroundColor: Colors.white, borderWidth: 1.5, borderColor: Colors.border,
+  multiLabel: {
+    fontFamily: Fonts.bodyMedium, fontSize: 11, color: Colors.muted,
+    textTransform: 'uppercase', letterSpacing: 1.6, marginBottom: 12,
   },
+
+  // Curl chart
+  chartRow: { flexDirection: 'row', gap: 10, marginBottom: 18, marginTop: 4 },
   chartItem: {
-    flex: 1, alignItems: 'center', gap: 6, padding: 10, borderRadius: 12,
-    borderWidth: 2, borderColor: 'transparent',
+    flex: 1, padding: 12, borderRadius: 14,
+    backgroundColor: Colors.white,
+    borderWidth: 1.5, borderColor: Colors.border,
+    alignItems: 'center', gap: 6,
   },
-  chartItemActive: {
-    borderColor: Colors.violet, backgroundColor: Colors.white,
-    shadowColor: Colors.violet, shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12, shadowRadius: 8, elevation: 3,
-  },
+  chartItemActive: { borderColor: Colors.violet, backgroundColor: 'rgba(118,67,172,0.04)' },
   chartPatternBox: {
-    width: 50, height: 64, alignItems: 'center', justifyContent: 'center',
-    backgroundColor: '#F7F5FB', borderRadius: 10,
+    width: 56, height: 70, alignItems: 'center', justifyContent: 'center',
+    borderRadius: 10, backgroundColor: '#F7F5FB',
   },
-  chartPatternBoxActive: { backgroundColor: '#F0EBFA' },
-  chartLabel: { fontFamily: Fonts.heading, fontSize: 13, color: Colors.muted },
+  chartPatternBoxActive: { backgroundColor: 'rgba(118,67,172,0.10)' },
+  chartLabel: { fontFamily: Fonts.bodyBold, fontSize: 14, color: Colors.ink },
   chartLabelActive: { color: Colors.violet },
-  chartDesc: { fontFamily: Fonts.body, fontSize: 9, color: Colors.muted, textAlign: 'center', lineHeight: 13 },
+  chartDesc: { fontFamily: Fonts.body, fontSize: 10, color: Colors.muted, textAlign: 'center', lineHeight: 13 },
   chartDescActive: { color: Colors.ink },
 
   // Options
   opts: { gap: 10 },
   opt: {
     flexDirection: 'row', alignItems: 'center', gap: 14,
-    paddingVertical: 16, paddingHorizontal: 16,
-    borderWidth: 1.5, borderColor: Colors.border,
-    borderRadius: Radius.lg, backgroundColor: Colors.white,
-  },
-  optSel: {
-    borderColor: Colors.violet,
+    padding: 16, borderRadius: 16,
     backgroundColor: Colors.white,
-    shadowColor: Colors.violet,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
-    elevation: 3,
+    borderWidth: 1.5, borderColor: Colors.border,
   },
+  optSel: { borderColor: Colors.violet, backgroundColor: 'rgba(118,67,172,0.04)' },
+  optPressed: { transform: [{ scale: 0.985 }], opacity: 0.92 },
 
   optStrand: {
-    width: 50, height: 64, borderRadius: 12,
-    backgroundColor: '#F7F5FB',
-    alignItems: 'center', justifyContent: 'center',
+    width: 50, height: 60, alignItems: 'center', justifyContent: 'center',
+    borderRadius: 10, backgroundColor: '#F7F5FB',
   },
-  optStrandSel: { backgroundColor: '#F0EBFA' },
+  optStrandSel: { backgroundColor: 'rgba(118,67,172,0.10)' },
 
   indicator: {
-    width: 24, height: 24, borderRadius: 12,
+    width: 22, height: 22, borderRadius: 11,
     borderWidth: 2, borderColor: Colors.border,
     alignItems: 'center', justifyContent: 'center',
   },
-  indicatorOn: {
-    borderColor: 'transparent',
-    backgroundColor: Colors.violet,
-  },
-  indicatorCheck: { color: Colors.white, fontSize: 13, fontWeight: '700', marginTop: -1 },
+  indicatorOn: { backgroundColor: Colors.violet, borderColor: Colors.violet },
+  indicatorCheck: { fontSize: 12, color: '#fff', fontFamily: Fonts.bodyBold, marginTop: -1 },
 
-  optBody: { flex: 1, gap: 3 },
-  optLabel: { fontFamily: Fonts.bodySemi, fontSize: 14, color: Colors.ink },
+  optBody: { flex: 1 },
+  optLabel: { fontFamily: Fonts.bodySemi, fontSize: 15, color: Colors.ink, marginBottom: 2 },
   optLabelSel: { color: Colors.violet },
-  optDesc: { fontFamily: Fonts.body, fontSize: 11, color: Colors.muted, lineHeight: 16 },
+  optDesc: { fontFamily: Fonts.body, fontSize: 12, color: Colors.muted, lineHeight: 16 },
 
-  // Footer
+  // Editorial interstitial
+  interstitial: {
+    paddingTop: 32,
+    paddingHorizontal: 4,
+    gap: 20,
+  },
+  intIndex: {
+    fontFamily: Fonts.bodyMedium,
+    fontSize: 11,
+    color: Colors.muted,
+    letterSpacing: 3,
+  },
+  intTitle: {
+    fontFamily: Fonts.heading,
+    fontSize: 32,
+    color: Colors.ink,
+    letterSpacing: -1,
+    lineHeight: 38,
+  },
+  intBody: {
+    fontFamily: Fonts.body,
+    fontSize: 14,
+    color: Colors.ink,
+    opacity: 0.62,
+    lineHeight: 22,
+    maxWidth: 360,
+    marginBottom: 4,
+  },
+
+  // Footer — solid violet, no gradient
   footer: {
-    paddingHorizontal: 20, paddingTop: 10,
-    paddingBottom: Platform.OS === 'ios' ? 38 : 24,
-    borderTopWidth: 1, borderTopColor: Colors.border,
+    paddingHorizontal: 24,
+    paddingTop: 12,
+    paddingBottom: Platform.OS === 'ios' ? 36 : 22,
     backgroundColor: Colors.porcelain,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(51,36,99,0.06)',
   },
   nextBtn: {
-    borderRadius: Radius.lg, overflow: 'hidden',
-    shadowColor: Colors.violet, shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2, shadowRadius: 10, elevation: 4,
+    width: '100%',
+    paddingVertical: 17,
+    borderRadius: Radius.lg,
+    backgroundColor: Colors.violet,
+    alignItems: 'center',
+    shadowColor: Colors.violet,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.22,
+    shadowRadius: 12,
+    elevation: 4,
   },
-  nextBtnOff: { shadowOpacity: 0 },
-  nextBtnPress: { transform: [{ scale: 0.985 }] },
-  nextInner: { paddingVertical: 17, alignItems: 'center' },
-  nextLabel: { fontFamily: Fonts.headingSemi, fontSize: 15, color: Colors.white },
-  nextLabelOff: { color: '#999' },
+  nextBtnOff: { backgroundColor: '#E0DCD5', shadowOpacity: 0, elevation: 0 },
+  nextBtnPress: { transform: [{ scale: 0.985 }], opacity: 0.92 },
+  nextLabel: { fontFamily: Fonts.headingSemi, fontSize: 15, color: Colors.white, letterSpacing: 0.2 },
+  nextLabelOff: { color: '#9D9686' },
 
   // Help sheet
-  sheetOverlay: { flex: 1, backgroundColor: 'rgba(18,11,46,0.5)', justifyContent: 'flex-end' },
+  sheetOverlay: { flex: 1, backgroundColor: 'rgba(18,11,46,0.4)', justifyContent: 'flex-end' },
   sheet: {
-    backgroundColor: Colors.porcelain, borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    paddingHorizontal: 22, paddingTop: 12, paddingBottom: Platform.OS === 'ios' ? 42 : 28,
-    maxHeight: '85%',
+    backgroundColor: Colors.white,
+    borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    paddingHorizontal: 24, paddingTop: 12, paddingBottom: 32,
+    maxHeight: '80%',
   },
-  sheetHandle: { width: 36, height: 4, borderRadius: 2, backgroundColor: Colors.border, alignSelf: 'center', marginBottom: 18 },
-  sheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  sheetTitle: { fontFamily: Fonts.heading, fontSize: 19, color: Colors.ink },
-  sheetClose: { fontSize: 20, color: Colors.muted, padding: 4 },
-  sheetBody: { fontFamily: Fonts.body, fontSize: 14, lineHeight: 23, color: Colors.ink, opacity: 0.7, marginBottom: 12 },
-
-  // Visual guide
-  guideSection: { marginTop: 8 },
-  guideTitle: { fontFamily: Fonts.headingSemi, fontSize: 14, color: Colors.ink, marginBottom: 12 },
-  guideRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 14,
-    padding: 12, borderRadius: 12, backgroundColor: Colors.white,
-    borderWidth: 1, borderColor: Colors.border, marginBottom: 8,
+  sheetHandle: {
+    alignSelf: 'center',
+    width: 38, height: 4, borderRadius: 2,
+    backgroundColor: Colors.border,
+    marginBottom: 14,
   },
-  guidePatternBox: {
-    width: 50, height: 60, borderRadius: 12, backgroundColor: '#F7F5FB',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  guideName: { fontFamily: Fonts.bodySemi, fontSize: 13, color: Colors.ink },
-  guideDesc: { fontFamily: Fonts.body, fontSize: 11, color: Colors.muted, lineHeight: 16 },
+  sheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  sheetTitle: { fontFamily: Fonts.heading, fontSize: 20, color: Colors.ink, letterSpacing: -0.3 },
+  sheetClose: { fontFamily: Fonts.heading, fontSize: 28, color: Colors.muted, lineHeight: 28 },
+  sheetBody: { fontFamily: Fonts.body, fontSize: 14, color: Colors.ink, lineHeight: 22 },
 });

@@ -17,6 +17,7 @@ import {
 } from '@expo-google-fonts/inter';
 import { Colors } from '@/constants/theme';
 import { supabase } from '@/lib/supabase';
+import { fullSync } from '@/lib/sync';
 import type { Session } from '@supabase/supabase-js';
 
 SplashScreen.preventAutoHideAsync();
@@ -27,7 +28,6 @@ export default function RootLayout() {
   const router = useRouter();
   const segments = useSegments();
 
-  // ─── Load fonts ────────────────────────────────────────────────
   const [fontsLoaded] = useFonts({
     Sora_400Regular,
     Sora_500Medium,
@@ -39,7 +39,6 @@ export default function RootLayout() {
     Inter_700Bold,
   });
 
-  // ─── Initialise ────────────────────────────────────────────────
   useEffect(() => {
     if (fontsLoaded) {
       setReady(true);
@@ -47,7 +46,6 @@ export default function RootLayout() {
     }
   }, [fontsLoaded]);
 
-  // ─── Listen for auth state changes ─────────────────────────────
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
@@ -57,17 +55,18 @@ export default function RootLayout() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
+      if (session) {
+        // Sync quiz data between device and cloud on login
+        fullSync().catch(() => {});
+      }
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  // ─── Protect routes ────────────────────────────────────────────
   useEffect(() => {
     if (!ready) return;
-
     const inAuthGroup = segments[0] === 'auth';
-
     if (session && inAuthGroup) {
       router.replace('/(tabs)/profile');
     }
@@ -77,7 +76,7 @@ export default function RootLayout() {
 
   return (
     <>
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
       <Stack
         screenOptions={{
           headerShown: false,
@@ -91,6 +90,18 @@ export default function RootLayout() {
         <Stack.Screen name="quiz" options={{ animation: 'slide_from_right', gestureEnabled: false }} />
         <Stack.Screen name="reveal" options={{ animation: 'fade' }} />
         <Stack.Screen name="(tabs)" options={{ animation: 'fade' }} />
+
+        {/* ── Sub-screens (push on top of tabs) ── */}
+        <Stack.Screen name="settings" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="subscription" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="wallet" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="favourites" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="xp-rewards" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="referral" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="bookings" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="privacy" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="help" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="hairtransfer" options={{ animation: 'slide_from_bottom', presentation: 'modal' }} />
       </Stack>
     </>
   );

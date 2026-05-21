@@ -1,27 +1,47 @@
 # Expo
 expo-env.d.ts
 .expo/
+.expo-shared/
+dist/
+web-build/
 
 # Dependencies
 node_modules/
 
-# Environment variables
+# Environment variables — NEVER COMMIT
 .env
 .env.local
+.env.development
+.env.production
 .env*.local
+
+# Supabase
+supabase/.temp/
+
+# Native build artifacts
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Metro
+.metro-health-check*
+
+# Debug logs
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# TypeScript build cache
+*.tsbuildinfo
+
+# IDE
+.vscode/
+.idea/
 
 # OS
 .DS_Store
 Thumbs.db
-
-# Build outputs
-android/
-ios/
-dist/. e n v 
- 
- 
-
-node_modules/
-.expo/
-supabase/.temp/
-.env
+*.pem

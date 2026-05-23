@@ -15,6 +15,13 @@ import {
   Inter_600SemiBold,
   Inter_700Bold,
 } from '@expo-google-fonts/inter';
+import {
+  Fraunces_400Regular,
+  Fraunces_500Medium,
+  Fraunces_600SemiBold,
+  Fraunces_700Bold,
+  Fraunces_400Regular_Italic,
+} from '@expo-google-fonts/fraunces';
 import { Colors } from '@/constants/theme';
 import { supabase } from '@/lib/supabase';
 import { fullSync } from '@/lib/sync';
@@ -37,6 +44,11 @@ export default function RootLayout() {
     Inter_500Medium,
     Inter_600SemiBold,
     Inter_700Bold,
+    Fraunces_400Regular,
+    Fraunces_500Medium,
+    Fraunces_600SemiBold,
+    Fraunces_700Bold,
+    Fraunces_400Regular_Italic,
   });
 
   useEffect(() => {
@@ -88,6 +100,7 @@ export default function RootLayout() {
         <Stack.Screen name="onboarding" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="auth" options={{ animation: 'slide_from_bottom', presentation: 'modal' }} />
         <Stack.Screen name="quiz" options={{ animation: 'slide_from_right', gestureEnabled: false }} />
+        <Stack.Screen name="name" options={{ animation: 'slide_from_right', gestureEnabled: false }} />
         <Stack.Screen name="reveal" options={{ animation: 'fade' }} />
         <Stack.Screen name="(tabs)" options={{ animation: 'fade' }} />
 

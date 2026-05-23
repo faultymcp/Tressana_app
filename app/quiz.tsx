@@ -542,7 +542,7 @@ export default function QuizScreen() {
       // intentional silent
     }
 
-    router.replace('/reveal');
+    router.replace('/name');
   }, [answers, router]);
 
   const handleNext = useCallback(async () => {

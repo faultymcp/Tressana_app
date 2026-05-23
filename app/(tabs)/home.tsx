@@ -1,125 +1,86 @@
+// app/(tabs)/home.tsx
+//
+// Tressana home — the daily editorial surface.
+//
+// Design lineage:
+//   - Flo's ritual (the user returns daily for a relationship with her hair)
+//   - Co-Star's editorial atmosphere (bold serif typography, atmospheric depth,
+//     content written for *you* not for a segment)
+//
+// Layout (top to bottom):
+//   1. Masthead — date in caps, greeting in Fraunces serif
+//   2. TODAY — the hero card. "Wash day." / "Refresh day." / "Style day."
+//              with today's actual steps as checkable rows
+//   3. Today's note — one italic Fraunces line, contextual ritual fact
+//   4. Your hair, in numbers — Flo-style cycle stats (day N of N, next wash)
+//   5. Your full routine — collapsed "Open routine" CTA
+//   6. Pick of the day — featured product OR educational content
+//   7. Salons near you — 2 teaser cards, "See all in Discover" link
+//   8. Closing note — small italic
+//
+// Voice: borrowed from the reveal voice doc. Same gold labels (Sora caps),
+// same Fraunces display, same Inter body. Cream/porcelain background instead
+// of deep violet because daily ≠ ceremonial.
+
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Pressable, Platform,
-  Dimensions, Linking, Animated as RNAnimated,
+  Dimensions, Animated as RNAnimated,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Path } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Animated, { FadeInUp, FadeIn } from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
 import { Colors, Fonts, Radius } from '@/constants/theme';
 import { supabase } from '@/lib/supabase';
-import Animated, { FadeInUp } from 'react-native-reanimated';
 
 const { width } = Dimensions.get('window');
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const todayIdx = () => { const d = new Date().getDay(); return d === 0 ? 6 : d - 1; };
+const todayLabel = () => DAYS[todayIdx()];
 
 // ─── Types ───────────────────────────────────────────────────────
 type Step = { id: string; name: string; desc: string; xp?: number };
 type DayPlan = { label: string; steps: Step[] };
 
-// ─── Icons ───────────────────────────────────────────────────────
-function IconArrow() {
-  return <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="#7643AC" strokeWidth={2.5} strokeLinecap="round"><Path d="M5 12h14M12 5l7 7-7 7" /></Svg>;
+// ─── Icons (small set, reused across the screen) ──────────────────
+function IconCheck({ color = '#FFFEF7' }: { color?: string }) {
+  return <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round"><Path d="M20 6L9 17l-5-5" /></Svg>;
 }
-function IconCheck() {
-  return <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={3} strokeLinecap="round"><Path d="M20 6L9 17l-5-5" /></Svg>;
-}
-function IconBookmark() {
-  return <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={Colors.muted} strokeWidth={1.8}><Path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" /></Svg>;
-}
-function IconMapPin() {
-  return <Svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke={Colors.violet} strokeWidth={2} strokeLinecap="round"><Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" /><Circle cx="12" cy="10" r="3" /></Svg>;
+function IconChev({ color = '#8A7FA0' }: { color?: string }) {
+  return <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round"><Path d="M9 18l6-6-6-6" /></Svg>;
 }
 function IconStar() {
-  return <Svg width={12} height={12} viewBox="0 0 24 24" fill="#8AB800" stroke="none"><Path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z" /></Svg>;
+  return <Svg width={11} height={11} viewBox="0 0 24 24" fill="#7643AC"><Path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z" /></Svg>;
 }
-function IconUsers() {
-  return <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={Colors.muted} strokeWidth={1.8} strokeLinecap="round"><Path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><Circle cx="9" cy="7" r="4" /><Path d="M23 21v-2a4 4 0 00-3-3.87" /><Path d="M16 3.13a4 4 0 010 7.75" /></Svg>;
-}
-function IconChevronRight() {
-  return <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={Colors.muted} strokeWidth={2} strokeLinecap="round"><Path d="M9 18l6-6-6-6" /></Svg>;
-}
-function IconZap() {
-  return <Svg width={12} height={12} viewBox="0 0 24 24" fill={Colors.violet} stroke="none"><Path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" /></Svg>;
+function IconPin() {
+  return <Svg width={11} height={11} viewBox="0 0 24 24" fill="none" stroke="#8A7FA0" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"><Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" /><Circle cx="12" cy="10" r="3" /></Svg>;
 }
 
-// ─── XP Toast ────────────────────────────────────────────────────
-function XpToast({ amount, visible }: { amount: number; visible: boolean }) {
-  const opacity = useRef(new RNAnimated.Value(0)).current;
-  const translateY = useRef(new RNAnimated.Value(10)).current;
-
-  useEffect(() => {
-    if (visible && amount > 0) {
-      RNAnimated.parallel([
-        RNAnimated.timing(opacity, { toValue: 1, duration: 200, useNativeDriver: true }),
-        RNAnimated.timing(translateY, { toValue: 0, duration: 200, useNativeDriver: true }),
-      ]).start(() => {
-        setTimeout(() => {
-          RNAnimated.parallel([
-            RNAnimated.timing(opacity, { toValue: 0, duration: 400, useNativeDriver: true }),
-            RNAnimated.timing(translateY, { toValue: -20, duration: 400, useNativeDriver: true }),
-          ]).start();
-        }, 1200);
-      });
-    }
-  }, [visible, amount]);
-
-  if (!visible) return null;
-
-  return (
-    <RNAnimated.View style={[st.xpToast, { opacity, transform: [{ translateY }] }]}>
-      <IconZap />
-      <Text style={st.xpToastText}>+{amount} XP</Text>
-    </RNAnimated.View>
-  );
+// ─── Greeting based on time ──────────────────────────────────────
+function greeting(): string {
+  const h = new Date().getHours();
+  if (h < 5) return 'Late evening';
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  if (h < 21) return 'Good evening';
+  return 'Late evening';
 }
 
-// ─── Progress Ring ───────────────────────────────────────────────
-function ProgressRing({ progress, size = 80, strokeWidth = 6 }: { progress: number; size?: number; strokeWidth?: number }) {
-  const r = (size - strokeWidth) / 2;
-  const c = 2 * Math.PI * r;
-  const offset = c - (progress / 100) * c;
-  return (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      <Svg width={size} height={size} style={{ transform: [{ rotate: '-90deg' }] }}>
-        <Circle cx={size/2} cy={size/2} r={r} stroke={Colors.border} strokeWidth={strokeWidth} fill="none" />
-        <Circle cx={size/2} cy={size/2} r={r} stroke={progress === 100 ? '#8AB800' : Colors.violet} strokeWidth={strokeWidth} fill="none" strokeDasharray={`${c}`} strokeDashoffset={offset} strokeLinecap="round" />
-      </Svg>
-      <View style={{ position: 'absolute', alignItems: 'center' }}>
-        <Text style={{ fontFamily: Fonts.heading, fontSize: 20, color: Colors.ink }}>{Math.round(progress)}%</Text>
-      </View>
-    </View>
-  );
+// ─── Date display: "TUESDAY · 24 NOV" ────────────────────────────
+function dateMasthead(): string {
+  const d = new Date();
+  const day = d.toLocaleDateString('en-GB', { weekday: 'long' }).toUpperCase();
+  const dayNum = d.getDate();
+  const month = d.toLocaleDateString('en-GB', { month: 'short' }).toUpperCase();
+  return `${day} · ${dayNum} ${month}`;
 }
 
-// ─── Hardcoded fallback (only used if DB has no templates) ───────
-function buildWeekFallback(typeGroup: string): Record<string, DayPlan> {
-  const protect: Step = { id: 'protect', name: 'Night protection', desc: 'Satin bonnet or pillowcase' };
-  const moisturise: Step = { id: 'moisturise', name: 'Moisturise', desc: 'Apply a light leave-in or water-based spray' };
-
-  // Minimal fallback — just enough to not be empty
-  return {
-    Mon: { label: 'Maintain', steps: [moisturise, protect] },
-    Tue: { label: 'Maintain', steps: [moisturise, protect] },
-    Wed: { label: 'Mid-week care', steps: [moisturise, protect] },
-    Thu: { label: 'Maintain', steps: [moisturise, protect] },
-    Fri: { label: 'Pre-wash prep', steps: [protect] },
-    Sat: { label: 'Wash day', steps: [
-      { id: 'cleanse', name: 'Cleanse', desc: 'Gentle shampoo on scalp' },
-      { id: 'condition', name: 'Condition', desc: 'Deep conditioner for 20 mins' },
-      { id: 'style', name: 'Style', desc: 'Apply styling products to wet hair' },
-      protect,
-    ]},
-    Sun: { label: 'Rest day', steps: [protect] },
-  };
-}
-
-// ─── Build routine from DB templates ─────────────────────────────
+// ─── Build week routine from DB ──────────────────────────────────
 async function buildWeekFromDB(goals: string[], segments: string[]): Promise<Record<string, DayPlan> | null> {
   try {
-    // Map quiz goal keys to DB enum values
     const goalMap: Record<string, string> = {
       moisture: 'retain_moisture', growth: 'grow_hair', definition: 'define_curls',
       frizz: 'reduce_breakage', scalp_goal: 'scalp_health', damage: 'heat_damage_recovery',
@@ -129,79 +90,67 @@ async function buildWeekFromDB(goals: string[], segments: string[]): Promise<Rec
       postpartum_recovery: 'postpartum_recovery', transition_natural: 'transition_natural',
       maintain_colour: 'maintain_colour', thicken_hair: 'thicken_hair',
     };
-
     const dbGoals = goals.map(g => goalMap[g] || g).filter(Boolean);
     if (dbGoals.length === 0) return null;
-
     const { data: templates, error } = await supabase
-      .from('routine_templates')
-      .select('*')
-      .in('goal', dbGoals)
-      .order('goal')
-      .order('step_order');
-
+      .from('routine_templates').select('*').in('goal', dbGoals).order('goal').order('step_order');
     if (error || !templates || templates.length === 0) return null;
-
-    // Filter: general (segment=null) + user's specific segments
     const relevant = templates.filter(t => !t.segment || segments.includes(t.segment));
-
-    // Deduplicate: prefer segment-specific over general
     const deduped: typeof relevant = [];
     const seen = new Set<string>();
-    for (const t of relevant) {
-      if (t.segment) { seen.add(`${t.goal}-${t.step_order}`); deduped.push(t); }
-    }
-    for (const t of relevant) {
-      if (!t.segment && !seen.has(`${t.goal}-${t.step_order}`)) { deduped.push(t); }
-    }
-
+    for (const t of relevant) { if (t.segment) { seen.add(`${t.goal}-${t.step_order}`); deduped.push(t); } }
+    for (const t of relevant) { if (!t.segment && !seen.has(`${t.goal}-${t.step_order}`)) deduped.push(t); }
     if (deduped.length === 0) return null;
-
-    // Map frequency to days
     const freqDays: Record<string, string[]> = {
-      daily: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-      every_other_day: ['Mon', 'Wed', 'Fri', 'Sun'],
-      twice_weekly: ['Tue', 'Fri'],
-      weekly: ['Sat'],
-      biweekly: ['Sat'],
-      monthly: ['Sat'],
-      as_needed: [],
+      daily: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],
+      every_other_day: ['Mon','Wed','Fri','Sun'],
+      twice_weekly: ['Tue','Fri'],
+      weekly: ['Sat'], biweekly: ['Sat'], monthly: ['Sat'], as_needed: [],
     };
-
     const week: Record<string, DayPlan> = {};
     for (const day of DAYS) {
       const daySteps: Step[] = [];
       for (const t of deduped) {
         const scheduled = freqDays[t.frequency] || [];
         if (scheduled.includes(day)) {
-          daySteps.push({
-            id: t.id,
-            name: t.step_name,
-            desc: t.step_description || '',
-            xp: 10,
-          });
+          daySteps.push({ id: t.id, name: t.step_name, desc: t.step_description || '', xp: 10 });
         }
       }
-      // Always add night protection
-      if (!daySteps.find(s => s.name.toLowerCase().includes('satin') || s.name.toLowerCase().includes('night'))) {
-        daySteps.push({ id: `protect-${day}`, name: 'Night protection', desc: 'Satin bonnet or pillowcase to protect hair', xp: 10 });
+      if (!daySteps.find(s => s.name.toLowerCase().includes('night'))) {
+        daySteps.push({ id: `protect-${day}`, name: 'Night protection', desc: 'Satin bonnet or pillowcase', xp: 10 });
       }
-
       const label = daySteps.length > 4 ? 'Wash day'
-        : daySteps.length > 2 ? 'Active care'
-        : daySteps.length > 1 ? 'Maintain'
-        : 'Rest day';
-
+        : daySteps.length > 2 ? 'Style day'
+        : 'Refresh day';
       week[day] = { label, steps: daySteps };
     }
     return week;
-  } catch (e) {
-    console.log('DB routine fetch failed:', e);
-    return null;
-  }
+  } catch (e) { return null; }
 }
 
-// ─── Award XP helper ─────────────────────────────────────────────
+// ─── Fallback routine ────────────────────────────────────────────
+function buildWeekFallback(): Record<string, DayPlan> {
+  const refresh: Step = { id: 'moisturise', name: 'Moisturise', desc: 'Light leave-in or water-based spray' };
+  const protect: Step = { id: 'protect', name: 'Night protection', desc: 'Satin bonnet or pillowcase' };
+  const refreshDay = { label: 'Refresh day', steps: [refresh, protect] };
+  const styleDay = { label: 'Style day', steps: [
+    { id: 'moisturise', name: 'Moisturise + restyle', desc: 'Refresh curls or smooth waves' },
+    refresh, protect,
+  ]};
+  const washDay = { label: 'Wash day', steps: [
+    { id: 'cleanse', name: 'Cleanse', desc: 'Gentle shampoo on scalp' },
+    { id: 'condition', name: 'Condition', desc: 'Mid-length to ends, detangle' },
+    { id: 'deep', name: 'Deep condition', desc: 'Mask for 20 minutes' },
+    { id: 'style', name: 'Style', desc: 'Apply styling products to wet hair' },
+    protect,
+  ]};
+  return {
+    Mon: refreshDay, Tue: refreshDay, Wed: styleDay, Thu: refreshDay,
+    Fri: refreshDay, Sat: washDay, Sun: refreshDay,
+  };
+}
+
+// ─── Award XP ────────────────────────────────────────────────────
 async function doAwardXp(action: string, refId?: string, desc?: string): Promise<number> {
   try {
     const { data: { user } } = await supabase.auth.getUser();
@@ -210,574 +159,852 @@ async function doAwardXp(action: string, refId?: string, desc?: string): Promise
       p_user_id: user.id, p_action: action,
       p_reference_id: refId || null, p_description: desc || null, p_override_amount: null,
     });
-    if (error) { console.log('XP error:', error.message); return 0; }
+    if (error) return 0;
     return data || 0;
-  } catch (e) { return 0; }
+  } catch { return 0; }
 }
 
-// ─── Static data for social sections ─────────────────────────────
-const TRENDING_CREATORS = [
-  { id: '1', name: 'NaturallyTasha', handle: '@naturallytasha', followers: '142K', speciality: 'Protective styles & growth tips', hair_types: ['4A–4C'], initials: 'NT', color: '#E8DFF5' },
-  { id: '2', name: 'CurlDocMia', handle: '@curldocmia', followers: '89K', speciality: 'Hair science & ingredient analysis', hair_types: ['3B–4B'], initials: 'CM', color: '#FCE4EC' },
-  { id: '3', name: 'CoilQueen', handle: '@coilqueen', followers: '203K', speciality: 'LOC method & moisture routines', hair_types: ['4B–4C'], initials: 'CQ', color: '#E0F2F1' },
-  { id: '4', name: 'TexturedTales', handle: '@texturedtales', followers: '67K', speciality: 'Wavy & curly transition journeys', hair_types: ['2C–3C'], initials: 'TT', color: '#FFF3E0' },
-];
+// ─── Daily ritual notes (templated by type/segment/cycle) ────────
+// Picks one note per day based on the day of year + hair context.
+// This is the "Co-Star daily horoscope" beat.
+function dailyNote(hairType: string, segments: string[], porosity: string, daysSinceWash: number): string {
+  const group = hairType.charAt(0);
+  const notes: string[] = [];
 
-const TRENDING_STYLES = [
-  { id: '1', name: 'Knotless Braids', saves: '12.4K', hair_types: ['4A', '4B', '4C'], time: '3–5 hrs', color: '#E8DFF5' },
-  { id: '2', name: 'Twist Out on TWA', saves: '8.9K', hair_types: ['4C'], time: 'Overnight', color: '#FCE4EC' },
-  { id: '3', name: 'Defined Wash & Go', saves: '15.2K', hair_types: ['3B', '3C', '4A'], time: '1 hr', color: '#E0F7FA' },
-  { id: '4', name: 'Bantu Knot Out', saves: '6.7K', hair_types: ['4A', '4B', '4C'], time: 'Overnight', color: '#FFF3E0' },
-];
+  // Cycle-based first (most specific)
+  if (daysSinceWash === 0) notes.push("Today's hair is freshly washed — let the natural oils start to do their work.");
+  else if (daysSinceWash >= 3 && daysSinceWash <= 5) notes.push("Day three to five is often when hair stops cooperating. Trust the rhythm.");
+  else if (daysSinceWash >= 6) notes.push("Your scalp will start letting you know it's wash time. Listen.");
 
-// ═════════════════════════════════════════════════════════════════
-// SCREEN
-// ═════════════════════════════════════════════════════════════════
+  // Porosity
+  if (porosity === 'low') notes.push("Low porosity hair likes warm water. Rinse on the cooler side of warm today.");
+  if (porosity === 'high') notes.push("Your hair drinks fast. Apply leave-in to soaking wet hair, not damp.");
+
+  // Type-group ritual
+  if (group === '3' || group === '4') notes.push("The less you touch curls as they dry, the more defined they set.");
+  if (group === '1' || group === '2') notes.push("Heat protectant on dry hair before any styling. Always. Five seconds. Three years.");
+
+  // Segments
+  if (segments.includes('postpartum')) notes.push("Postpartum shed is loudest in months three to six. It does end.");
+  if (segments.includes('transitioning')) notes.push("Two textures coexisting in your hair is the whole point of transitioning.");
+  if (segments.includes('transplant')) notes.push("Donor hair acts like the hair it came from. Treat it like the hair it is now.");
+
+  // Pick one deterministically by day so it's stable across re-renders that day
+  const seed = new Date().toISOString().slice(0, 10).split('-').reduce((a, b) => a + parseInt(b), 0);
+  return notes[seed % notes.length] || "Your hair is its own thing today. Read it before you reach for anything.";
+}
+
+// ─── XP Toast ────────────────────────────────────────────────────
+function XpToast({ amount, visible }: { amount: number; visible: boolean }) {
+  const opacity = useRef(new RNAnimated.Value(0)).current;
+  const translateY = useRef(new RNAnimated.Value(20)).current;
+  useEffect(() => {
+    if (visible) {
+      RNAnimated.parallel([
+        RNAnimated.timing(opacity, { toValue: 1, duration: 240, useNativeDriver: true }),
+        RNAnimated.timing(translateY, { toValue: 0, duration: 240, useNativeDriver: true }),
+      ]).start();
+      const t = setTimeout(() => {
+        RNAnimated.parallel([
+          RNAnimated.timing(opacity, { toValue: 0, duration: 240, useNativeDriver: true }),
+          RNAnimated.timing(translateY, { toValue: 20, duration: 240, useNativeDriver: true }),
+        ]).start();
+      }, 1800);
+      return () => clearTimeout(t);
+    }
+  }, [visible]);
+  return (
+    <RNAnimated.View style={[st.toast, { opacity, transform: [{ translateY }] }]} pointerEvents="none">
+      <Text style={st.toastText}>+{amount} XP</Text>
+    </RNAnimated.View>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Home screen
+// ═══════════════════════════════════════════════════════════════
 export default function HomeScreen() {
   const router = useRouter();
-  const [greeting, setGreeting] = useState('');
-  const [selectedDay, setSelectedDay] = useState(todayIdx());
-  const [checks, setChecks] = useState<Record<string, Record<string, boolean>>>({});
-  const [weekPlan, setWeekPlan] = useState<Record<string, DayPlan>>({});
+  const [firstName, setFirstName] = useState('');
   const [hairType, setHairType] = useState('');
-  const [userGoals, setUserGoals] = useState<string[]>([]);
-  const [userSegments, setUserSegments] = useState<string[]>(['natural']);
-  const [streak, setStreak] = useState(0);
-  const [products, setProducts] = useState<any[]>([]);
+  const [porosity, setPorosity] = useState('');
+  const [segments, setSegments] = useState<string[]>([]);
+  const [weekPlan, setWeekPlan] = useState<Record<string, DayPlan>>({});
+  const [checks, setChecks] = useState<Record<string, Record<string, boolean>>>({});
+  const [daysSinceWash, setDaysSinceWash] = useState(0);
   const [salons, setSalons] = useState<any[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
+  const [streak, setStreak] = useState(0);
   const [xpToday, setXpToday] = useState(0);
-  const [xpToastAmount, setXpToastAmount] = useState(0);
-  const [xpToastVisible, setXpToastVisible] = useState(false);
-  const [routineSource, setRoutineSource] = useState<'db' | 'fallback'>('fallback');
+  const [toastAmount, setToastAmount] = useState(0);
+  const [toastVisible, setToastVisible] = useState(false);
+  const [routineExpanded, setRoutineExpanded] = useState(false);
 
-  const typeGroup = hairType.charAt(0) || '3';
-  const dayKey = DAYS[selectedDay];
-  const dayPlan = weekPlan[dayKey] || { label: '', steps: [] };
-  const dayChecks = checks[dayKey] || {};
-  const checkedCount = dayPlan.steps.filter(s => dayChecks[s.id]).length;
-  const totalSteps = dayPlan.steps.length;
-  const pct = totalSteps > 0 ? Math.round((checkedCount / totalSteps) * 100) : 0;
-
-  // ── Show XP toast ──────────────────────────────────────────────
   const showXpToast = (amount: number) => {
-    setXpToastAmount(amount);
-    setXpToastVisible(false);
-    setTimeout(() => setXpToastVisible(true), 50);
+    setToastAmount(amount);
+    setToastVisible(true);
+    setTimeout(() => setToastVisible(false), 2400);
   };
 
-  // ── Init ───────────────────────────────────────────────────────
+  // Load all data on mount
   useEffect(() => {
-    const h = new Date().getHours();
-    setGreeting(h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening');
-
-    // Award daily login XP (once per day)
     (async () => {
+      // User name
+      const userRaw = await AsyncStorage.getItem('tressana_user');
+      const userObj = userRaw ? JSON.parse(userRaw) : null;
+      setFirstName(userObj?.firstName?.trim() || '');
+
+      // Quiz data
+      const quizRaw = await AsyncStorage.getItem('tressana_quiz');
+      const data = quizRaw ? JSON.parse(quizRaw) : null;
+      const ht = data?.hairType || '3A';
+      const goals = data?.goals || [];
+      const segs = data?.segments || ['natural'];
+      const por = data?.porosity || 'medium';
+      setHairType(ht);
+      setSegments(segs);
+      setPorosity(por);
+
+      // Build routine
+      const dbPlan = await buildWeekFromDB(goals, segs);
+      setWeekPlan(dbPlan || buildWeekFallback());
+
+      // Checks (completed steps per day)
+      const checksRaw = await AsyncStorage.getItem('tressana_checks');
+      if (checksRaw) setChecks(JSON.parse(checksRaw));
+
+      // Days since wash (rough estimate from check history)
+      const lastWashRaw = await AsyncStorage.getItem('tressana_last_wash');
+      if (lastWashRaw) {
+        const last = new Date(lastWashRaw);
+        const diff = Math.floor((Date.now() - last.getTime()) / (1000 * 60 * 60 * 24));
+        setDaysSinceWash(Math.max(0, Math.min(diff, 14)));
+      }
+
+      // Daily login XP
       const today = new Date().toISOString().split('T')[0];
       const lastLogin = await AsyncStorage.getItem('tressana_last_login_xp');
       if (lastLogin !== today) {
         const xp = await doAwardXp('daily_login', undefined, 'Daily app open');
-        if (xp > 0) {
-          setXpToday(prev => prev + xp);
-          showXpToast(xp);
-        }
-        // Update streak
+        if (xp > 0) { setXpToday(prev => prev + xp); showXpToast(xp); }
         try {
           const { data: { user } } = await supabase.auth.getUser();
           if (user) await supabase.rpc('update_streak', { p_user_id: user.id });
-        } catch (e) {}
+        } catch {}
         await AsyncStorage.setItem('tressana_last_login_xp', today);
       }
-    })();
 
-    // Load quiz data + build routine
-    AsyncStorage.getItem('tressana_quiz').then(async raw => {
-      const data = raw ? JSON.parse(raw) : null;
-      const ht = data?.hairType || '3A';
-      const goals = data?.goals || [];
-      const segments = data?.segments || ['natural'];
-
-      setHairType(ht);
-      setUserGoals(goals);
-      setUserSegments(segments);
-
-      // Try DB-backed routine first (uses goals + segments)
-      const dbPlan = await buildWeekFromDB(goals, segments);
-      if (dbPlan) {
-        setWeekPlan(dbPlan);
-        setRoutineSource('db');
-      } else {
-        // Fallback to minimal hardcoded plan
-        setWeekPlan(buildWeekFallback(ht.charAt(0)));
-        setRoutineSource('fallback');
-      }
-
-      // Fetch products
-      supabase.from('products').select('*').contains('hair_types', [ht.charAt(0)]).then(({ data: prods }) => {
-        if (prods) setProducts(prods);
-      });
-    });
-
-    // Load checks
-    AsyncStorage.getItem('tressana_checks').then(raw => {
-      if (raw) setChecks(JSON.parse(raw));
-    });
-
-    // Fetch XP status
-    (async () => {
+      // Streak
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
-          const { data } = await supabase.from('xp_balances')
+          const { data: sd } = await supabase.from('xp_balances')
             .select('current_daily_streak').eq('user_id', user.id).maybeSingle();
-          if (data) setStreak(data.current_daily_streak || 0);
+          if (sd) setStreak(sd.current_daily_streak || 0);
         }
-      } catch (e) {}
-    })();
+      } catch {}
 
-    // Fetch top salons
-    supabase.from('salons').select('id, name, area, city, rating, review_count, hair_types')
-      .order('rating', { ascending: false }).limit(3)
-      .then(({ data }) => {
-        if (data) setSalons(data.map((s: any) => ({
-          ...s, initials: s.name.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase(),
-        })));
-      });
+      // Products
+      supabase.from('products').select('*').contains('hair_types', [ht.charAt(0)]).limit(3)
+        .then(({ data: prods }) => { if (prods) setProducts(prods); });
+
+      // Top salons
+      supabase.from('salons').select('id, name, area, city, rating, review_count, hair_types')
+        .order('rating', { ascending: false }).limit(2)
+        .then(({ data: sds }) => {
+          if (sds) setSalons(sds.map((s: any) => ({
+            ...s,
+            initials: s.name.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase(),
+          })));
+        });
+    })();
   }, []);
 
-  // ── Streak calc from checks ────────────────────────────────────
-  useEffect(() => {
-    if (Object.keys(weekPlan).length === 0) return;
-    let s = 0;
-    for (let i = todayIdx(); i >= 0; i--) {
-      const dp = weekPlan[DAYS[i]];
-      if (!dp) break;
-      const dc = checks[DAYS[i]] || {};
-      const done = dp.steps.filter(r => dc[r.id]).length;
-      if (done === dp.steps.length && dp.steps.length > 0) s++;
-      else break;
-    }
-    if (s > streak) setStreak(s);
-  }, [checks, weekPlan]);
-
-  // ── Toggle check + award XP ────────────────────────────────────
-  const toggleCheck = useCallback(async (stepId: string) => {
-    const wasChecked = checks[dayKey]?.[stepId];
-    const updated = { ...checks, [dayKey]: { ...checks[dayKey], [stepId]: !wasChecked } };
+  // Toggle a step done/undone
+  const toggleStep = useCallback(async (stepId: string, stepName: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    const day = todayLabel();
+    const dayChecks = { ...(checks[day] || {}) };
+    const wasDone = !!dayChecks[stepId];
+    dayChecks[stepId] = !wasDone;
+    const updated = { ...checks, [day]: dayChecks };
     setChecks(updated);
-    AsyncStorage.setItem('tressana_checks', JSON.stringify(updated));
+    await AsyncStorage.setItem('tressana_checks', JSON.stringify(updated));
 
-    // Award XP only when CHECKING (not unchecking)
-    if (!wasChecked) {
-      const stepName = dayPlan.steps.find(s => s.id === stepId)?.name || 'Step';
+    // If wash step completed, record wash date
+    if (!wasDone && (stepName.toLowerCase().includes('cleanse') || stepName.toLowerCase().includes('wash') || stepName.toLowerCase().includes('shampoo'))) {
+      await AsyncStorage.setItem('tressana_last_wash', new Date().toISOString());
+      setDaysSinceWash(0);
+    }
+
+    // Award XP for completing
+    if (!wasDone) {
       const xp = await doAwardXp('complete_routine_step', stepId, `Completed: ${stepName}`);
       if (xp > 0) {
         setXpToday(prev => prev + xp);
         showXpToast(xp);
-      }
-
-      // Check if ALL steps now complete → bonus XP
-      const allDone = dayPlan.steps.every(s => s.id === stepId ? true : checks[dayKey]?.[s.id]);
-      if (allDone && dayPlan.steps.length > 1) {
-        setTimeout(async () => {
-          const bonus = await doAwardXp('complete_full_routine', undefined, 'Full daily routine completed');
+        // Check if all done → bonus
+        const today = weekPlan[day];
+        if (today && today.steps.every(s => updated[day]?.[s.id])) {
+          const bonus = await doAwardXp('complete_full_routine', undefined, 'Full routine done');
           if (bonus > 0) {
-            setXpToday(prev => prev + bonus);
-            showXpToast(bonus);
+            setTimeout(() => { setXpToday(p => p + bonus); showXpToast(bonus); }, 1000);
           }
-        }, 800); // Slight delay so user sees both toasts
+        }
       }
     }
-  }, [dayKey, checks, dayPlan]);
+  }, [checks, weekPlan]);
+
+  const today = weekPlan[todayLabel()] || { label: '', steps: [] };
+  const todayChecks = checks[todayLabel()] || {};
+  const completedCount = today.steps.filter(s => todayChecks[s.id]).length;
+  const totalCount = today.steps.length;
+  const progress = totalCount > 0 ? completedCount / totalCount : 0;
+
+  const note = dailyNote(hairType || '3A', segments, porosity, daysSinceWash);
+
+  // Determine next wash day
+  const nextWashDay = (() => {
+    const todayI = todayIdx();
+    for (let i = 1; i <= 7; i++) {
+      const d = DAYS[(todayI + i) % 7];
+      if (weekPlan[d]?.label === 'Wash day') return d;
+    }
+    return null;
+  })();
 
   return (
-    <ScrollView style={st.container} contentContainerStyle={st.scroll} showsVerticalScrollIndicator={false}>
-
-      {/* Header */}
-      <View style={st.header}>
-        <View>
-          <Text style={st.greeting}>{greeting}</Text>
-          <Text style={st.title}>Your Hair Day</Text>
-        </View>
-        <View style={st.headerRight}>
-          {xpToday > 0 && (
-            <View style={st.xpBadge}>
-              <IconZap />
-              <Text style={st.xpBadgeText}>+{xpToday}</Text>
-            </View>
-          )}
-          {streak > 0 && (
-            <View style={st.streakBadge}>
-              <Text style={st.streakLabel}>streak</Text>
-              <Text style={st.streakNum}>{streak}</Text>
-            </View>
-          )}
-        </View>
-      </View>
-
-      {/* XP Toast (floating) */}
-      <XpToast amount={xpToastAmount} visible={xpToastVisible} />
-
-      {/* Try a Hairstyle Card */}
-      <Animated.View entering={FadeInUp.duration(400)}>
-        <Pressable onPress={() => router.push('/hairtransfer')} style={({ pressed }) => [pressed && { opacity: 0.95 }]}>
-          <LinearGradient colors={['#7643AC', '#9B59D0', '#F484B9']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={st.tryCard}>
-            <View style={st.tryContent}>
-              <Text style={st.tryTitle}>Try a new hairstyle</Text>
-              <Text style={st.tryDesc}>Upload your selfie and a reference photo to see yourself with a new look.</Text>
-              <View style={st.tryBtn}>
-                <Text style={st.tryBtnText}>Try now</Text>
-                <IconArrow />
+    <View style={st.container}>
+      <ScrollView
+        contentContainerStyle={st.scroll}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* ── 1. MASTHEAD ── */}
+        <Animated.View entering={FadeIn.duration(400)} style={st.masthead}>
+          <View style={st.mastheadTop}>
+            <Text style={st.dateLabel}>{dateMasthead()}</Text>
+            {streak > 0 && (
+              <View style={st.streakPill}>
+                <Text style={st.streakText}>{streak}</Text>
+                <Text style={st.streakLabel}>day streak</Text>
               </View>
-            </View>
-            <View style={st.tryDecor}>
-              <Svg width={60} height={80} viewBox="0 0 50 70" opacity={0.2}>
-                <Path d="M25 2 C36 5, 36 16, 25 18 C14 20, 14 31, 25 33 C36 35, 36 46, 25 48 C14 50, 14 61, 25 63 L25 68" stroke="#fff" strokeWidth={2} fill="none" strokeLinecap="round" />
-              </Svg>
-            </View>
-          </LinearGradient>
-        </Pressable>
-      </Animated.View>
-
-      {/* Routine source indicator */}
-      {routineSource === 'db' && userGoals.length > 0 && (
-        <View style={st.routineTag}>
-          <Text style={st.routineTagText}>
-            Routine personalised for: {userGoals.map(g => {
-              const labels: Record<string, string> = { moisture: 'Moisture', growth: 'Growth', definition: 'Curl definition', frizz: 'Frizz control', scalp_goal: 'Scalp health', damage: 'Damage repair', grow_hair: 'Growth', retain_moisture: 'Moisture', reduce_breakage: 'Less breakage', scalp_health: 'Scalp health', define_curls: 'Curl definition' };
-              return labels[g] || g;
-            }).join(' · ')}
-            {userSegments.filter(s => s !== 'natural').length > 0 && ` · ${userSegments.filter(s => s !== 'natural').map(s => s.replace('_', ' ')).join(', ')}`}
-          </Text>
-        </View>
-      )}
-
-      {/* Tracker */}
-      <Animated.View entering={FadeInUp.delay(50).duration(400)} style={st.tracker}>
-        <LinearGradient colors={['#FDFCFF', '#F9F7FE']} style={st.trackerInner}>
-          <View style={st.trackerTop}>
-            <ProgressRing progress={pct} size={86} strokeWidth={7} />
-            <View style={st.trackerInfo}>
-              <Text style={st.trackerDay}>{DAYS[selectedDay]}</Text>
-              <Text style={st.trackerLabel}>{dayPlan.label}</Text>
-              <Text style={st.trackerSub}>{checkedCount}/{totalSteps} steps</Text>
-              {pct === 100 && (
-                <View style={st.doneBadge}>
-                  <Text style={st.doneText}>Complete — +25 bonus XP</Text>
-                </View>
-              )}
-            </View>
+            )}
           </View>
+          <Text style={st.greeting}>
+            {greeting()}{firstName ? `, ${firstName}` : ''}.
+          </Text>
+        </Animated.View>
 
-          <View style={st.weekRow}>
-            {DAYS.map((d, i) => {
-              const active = i === selectedDay;
-              const dp = weekPlan[d];
-              const dc = checks[d] || {};
-              const done = dp ? dp.steps.filter(s => dc[s.id]).length : 0;
-              const total = dp ? dp.steps.length : 0;
-              const allDone = done === total && total > 0;
-              const partial = done > 0 && !allDone;
-              const isToday = i === todayIdx();
+        {/* ── 2. TODAY (hero) ── */}
+        <Animated.View entering={FadeInUp.delay(80).duration(450)} style={st.heroCard}>
+          <Text style={st.editorialLabel}>TODAY</Text>
+          <Text style={st.heroTitle}>{today.label || 'A quiet day.'}</Text>
+          {totalCount > 0 && (
+            <Text style={st.heroSubtitle}>
+              {completedCount} of {totalCount} done · {Math.round(progress * 100)}%
+            </Text>
+          )}
+
+          {/* Step rows */}
+          <View style={st.steps}>
+            {today.steps.slice(0, 4).map(step => {
+              const done = !!todayChecks[step.id];
               return (
-                <Pressable key={d} onPress={() => setSelectedDay(i)} style={[st.dayCol, active && st.dayColActive]}>
-                  <Text style={[st.dayText, active && st.dayTextActive]}>{d}</Text>
-                  <View style={[st.dayDot, allDone && st.dayDotDone, partial && st.dayDotPartial, isToday && !active && st.dayDotToday]} />
+                <Pressable
+                  key={step.id}
+                  onPress={() => toggleStep(step.id, step.name)}
+                  style={({ pressed }) => [st.stepRow, pressed && { opacity: 0.7 }]}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: done }}
+                  accessibilityLabel={`${done ? 'Completed' : 'Mark complete'}: ${step.name}`}
+                >
+                  <View style={[st.stepCheck, done && st.stepCheckDone]}>
+                    {done && <IconCheck />}
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[st.stepName, done && st.stepNameDone]}>{step.name}</Text>
+                    <Text style={[st.stepDesc, done && st.stepDescDone]}>{step.desc}</Text>
+                  </View>
                 </Pressable>
               );
             })}
+            {today.steps.length > 4 && (
+              <Text style={st.moreSteps}>+ {today.steps.length - 4} more in your full routine</Text>
+            )}
           </View>
-        </LinearGradient>
-      </Animated.View>
 
-      {/* Steps */}
-      <Animated.View entering={FadeInUp.delay(100).duration(400)}>
-        <Text style={st.section}>{dayPlan.label || "Today's steps"}</Text>
-        <View style={st.steps}>
-          {dayPlan.steps.map((step, i) => {
-            const done = dayChecks[step.id];
-            return (
-              <Pressable key={`${dayKey}-${step.id}`} onPress={() => toggleCheck(step.id)} style={[st.step, done && st.stepDone]}>
-                <View style={[st.stepNum, done && st.stepNumDone]}>
-                  {done ? <IconCheck /> : <Text style={st.stepNumText}>{i + 1}</Text>}
-                </View>
-                <View style={st.stepBody}>
-                  <Text style={[st.stepName, done && st.stepNameDone]}>{step.name}</Text>
-                  <Text style={st.stepDesc}>{step.desc}</Text>
-                </View>
-                <View style={st.stepXp}>
-                  <IconZap />
-                  <Text style={st.stepXpText}>{done ? 'Earned' : '+10'}</Text>
-                </View>
-              </Pressable>
-            );
-          })}
-        </View>
-      </Animated.View>
-
-      {/* Products */}
-      {products.length > 0 && (
-        <Animated.View entering={FadeInUp.delay(200).duration(400)}>
-          <Text style={st.section}>Recommended for you</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.prodRow}>
-            {products.map((p) => (
-              <Pressable key={p.id} onPress={() => Linking.openURL(p.url)} style={st.prodCard}>
-                <View style={st.prodTop}>
-                  <Text style={st.prodBrand}>{p.brand}</Text>
-                  <Text style={st.prodPrice}>{p.price}</Text>
-                </View>
-                <Text style={st.prodName}>{p.name}</Text>
-                <Text style={st.prodWhy}>{p.why_it_works}</Text>
-                <View style={st.prodFooter}>
-                  <Text style={st.prodRetailer}>{p.retailer}</Text>
-                  <Text style={st.prodLink}>View product</Text>
-                </View>
-              </Pressable>
-            ))}
-          </ScrollView>
+          {/* Progress bar at bottom */}
+          {totalCount > 0 && (
+            <View style={st.progressTrack}>
+              <View style={[st.progressFill, { width: `${progress * 100}%` }]} />
+            </View>
+          )}
         </Animated.View>
-      )}
 
-      {/* Trending Creators */}
-      <Animated.View entering={FadeInUp.delay(250).duration(400)}>
-        <View style={st.sectionHeader}>
-          <Text style={st.section}>Trending creators</Text>
-          <Pressable><Text style={st.seeAll}>See all</Text></Pressable>
-        </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.creatorScroll}>
-          {TRENDING_CREATORS.map((c) => (
-            <Pressable key={c.id} style={st.creatorCard}>
-              <View style={[st.creatorImgArea, { backgroundColor: c.color }]}>
-                <View style={st.creatorAvatar}>
-                  <Text style={st.creatorInitials}>{c.initials}</Text>
-                </View>
-              </View>
-              <View style={st.creatorInfo}>
-                <Text style={st.creatorName} numberOfLines={1}>{c.name}</Text>
-                <Text style={st.creatorHandle}>{c.handle}</Text>
-                <Text style={st.creatorSpec} numberOfLines={2}>{c.speciality}</Text>
-                <View style={st.creatorBottom}>
-                  <View style={st.creatorFollowers}>
-                    <IconUsers />
-                    <Text style={st.creatorFollowerText}>{c.followers}</Text>
-                  </View>
-                </View>
-              </View>
-            </Pressable>
-          ))}
-        </ScrollView>
-      </Animated.View>
+        {/* ── 3. TODAY'S NOTE ── */}
+        <Animated.View entering={FadeInUp.delay(160).duration(450)} style={st.noteCard}>
+          <Text style={st.noteLabel}>TODAY'S NOTE</Text>
+          <Text style={st.noteText}>{note}</Text>
+        </Animated.View>
 
-      {/* Trending Hairstyles */}
-      <Animated.View entering={FadeInUp.delay(300).duration(400)}>
-        <View style={st.sectionHeader}>
-          <Text style={st.section}>Trending hairstyles</Text>
-          <Pressable onPress={() => router.push('/(tabs)/discover')}><Text style={st.seeAll}>See all</Text></Pressable>
-        </View>
-        <View style={st.styleGrid}>
-          {TRENDING_STYLES.map((s) => (
-            <Pressable key={s.id} style={st.styleCard}>
-              <View style={[st.styleImgArea, { backgroundColor: s.color }]}>
-                <Pressable style={st.styleBookmark}><IconBookmark /></Pressable>
-                <View style={st.styleTimeBadge}><Text style={st.styleTimeText}>{s.time}</Text></View>
-              </View>
-              <View style={st.styleInfo}>
-                <Text style={st.styleName} numberOfLines={1}>{s.name}</Text>
-                <View style={st.styleBottom}>
-                  <Text style={st.styleSaves}>{s.saves} saves</Text>
-                  <View style={st.styleTags}>
-                    {s.hair_types.slice(0, 2).map(t => (
-                      <View key={t} style={st.typeTag}><Text style={st.typeTagText}>{t}</Text></View>
-                    ))}
-                  </View>
-                </View>
-              </View>
-            </Pressable>
-          ))}
-        </View>
-      </Animated.View>
-
-      {/* Stylists near you */}
-      {salons.length > 0 && (
-        <Animated.View entering={FadeInUp.delay(350).duration(400)}>
-          <View style={st.sectionHeader}>
-            <Text style={st.section}>Stylists near you</Text>
-            <Pressable onPress={() => router.push('/(tabs)/salons')}><Text style={st.seeAll}>See all</Text></Pressable>
+        {/* ── 4. YOUR HAIR, IN NUMBERS ── */}
+        <Animated.View entering={FadeInUp.delay(240).duration(450)} style={st.rhythmCard}>
+          <Text style={st.editorialLabel}>YOUR RHYTHM</Text>
+          <View style={st.rhythmRow}>
+            <View style={st.rhythmCol}>
+              <Text style={st.rhythmNum}>{daysSinceWash}</Text>
+              <Text style={st.rhythmLabel}>days since wash</Text>
+            </View>
+            <View style={st.rhythmDivider} />
+            <View style={st.rhythmCol}>
+              <Text style={st.rhythmNum}>{nextWashDay || '—'}</Text>
+              <Text style={st.rhythmLabel}>next wash</Text>
+            </View>
+            <View style={st.rhythmDivider} />
+            <View style={st.rhythmCol}>
+              <Text style={st.rhythmNum}>{hairType || '—'}</Text>
+              <Text style={st.rhythmLabel}>your type</Text>
+            </View>
           </View>
-          <View style={st.salonList}>
-            {salons.map((s: any) => (
-              <Pressable key={s.id} onPress={() => router.push('/(tabs)/salons')} style={st.salonCard}>
-                <View style={st.salonAvatar}><Text style={st.salonInitials}>{s.initials}</Text></View>
-                <View style={st.salonBody}>
+        </Animated.View>
+
+        {/* ── 5. YOUR FULL ROUTINE (collapsible) ── */}
+        <Animated.View entering={FadeInUp.delay(320).duration(450)} style={st.routineCard}>
+          <Pressable
+            onPress={() => {
+              Haptics.selectionAsync().catch(() => {});
+              setRoutineExpanded(!routineExpanded);
+            }}
+            style={st.routineHeader}
+            accessibilityRole="button"
+            accessibilityLabel={routineExpanded ? 'Collapse full routine' : 'Open full routine'}
+          >
+            <View>
+              <Text style={st.editorialLabel}>YOUR FULL ROUTINE</Text>
+              <Text style={st.routineTitle}>Across the week</Text>
+            </View>
+            <View style={[st.chevWrap, routineExpanded && st.chevWrapOpen]}>
+              <IconChev color="#7643AC" />
+            </View>
+          </Pressable>
+          {routineExpanded && (
+            <View style={st.routineWeek}>
+              {DAYS.map(d => {
+                const plan = weekPlan[d];
+                if (!plan) return null;
+                const isToday = d === todayLabel();
+                return (
+                  <View key={d} style={[st.dayRow, isToday && st.dayRowToday]}>
+                    <Text style={[st.dayName, isToday && st.dayNameToday]}>{d}</Text>
+                    <Text style={[st.dayLabel, isToday && st.dayLabelToday]}>{plan.label}</Text>
+                    <Text style={st.dayStepCount}>{plan.steps.length} steps</Text>
+                  </View>
+                );
+              })}
+            </View>
+          )}
+        </Animated.View>
+
+        {/* ── 6. PICK OF THE DAY (product OR content) ── */}
+        {products.length > 0 && (
+          <Animated.View entering={FadeInUp.delay(400).duration(450)} style={st.pickCard}>
+            <Text style={st.goldLabel}>PICK OF THE DAY</Text>
+            <Text style={st.pickTitle}>{products[0].name}</Text>
+            <Text style={st.pickBrand}>{products[0].brand || 'For your type'}</Text>
+            <Text style={st.pickBody} numberOfLines={3}>
+              {products[0].description || 'Selected for your hair structure today.'}
+            </Text>
+            <Pressable onPress={() => router.push('/(tabs)/discover')} style={st.pickCta}>
+              <Text style={st.pickCtaText}>See in Discover →</Text>
+            </Pressable>
+          </Animated.View>
+        )}
+
+        {/* ── 7. SALONS NEAR YOU ── */}
+        {salons.length > 0 && (
+          <Animated.View entering={FadeInUp.delay(480).duration(450)} style={st.salonsSection}>
+            <View style={st.sectionHeader}>
+              <Text style={st.editorialLabel}>SALONS NEAR YOU</Text>
+              <Pressable onPress={() => router.push('/(tabs)/salons')}>
+                <Text style={st.seeAll}>See all →</Text>
+              </Pressable>
+            </View>
+            {salons.map(s => (
+              <Pressable
+                key={s.id}
+                onPress={() => router.push('/(tabs)/salons')}
+                style={st.salonCard}
+                accessibilityRole="button"
+                accessibilityLabel={`Salon: ${s.name}`}
+              >
+                <View style={st.salonInitials}>
+                  <Text style={st.salonInitialsText}>{s.initials}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
                   <Text style={st.salonName}>{s.name}</Text>
-                  <View style={st.salonLocRow}><IconMapPin /><Text style={st.salonArea}>{s.area}, {s.city}</Text></View>
-                  <View style={st.salonMetaRow}>
-                    <View style={st.salonRating}><IconStar /><Text style={st.salonRatingText}>{s.rating}</Text><Text style={st.salonReviewCount}>({s.review_count})</Text></View>
+                  <View style={st.salonMeta}>
+                    <IconPin />
+                    <Text style={st.salonArea}>{s.area || s.city || 'Nearby'}</Text>
+                    <Text style={st.salonDot}>·</Text>
+                    <IconStar />
+                    <Text style={st.salonRating}>{(s.rating || 0).toFixed(1)}</Text>
                   </View>
                 </View>
-                <IconChevronRight />
+                <IconChev />
               </Pressable>
             ))}
-          </View>
+          </Animated.View>
+        )}
+
+        {/* ── 8. CLOSING NOTE ── */}
+        <Animated.View entering={FadeInUp.delay(560).duration(450)} style={st.closer}>
+          <Text style={st.closerText}>
+            Tressana adjusts as you do — tap any step to make it yours.
+          </Text>
         </Animated.View>
-      )}
+      </ScrollView>
 
-      {/* Tip */}
-      <Animated.View entering={FadeInUp.delay(400).duration(400)}>
-        <LinearGradient colors={['#120B2E', '#332463']} style={st.tip}>
-          <View style={st.tipBadge}><Text style={st.tipBadgeText}>TIP</Text></View>
-          <Text style={st.tipTitle}>
-            {userSegments.includes('braids') ? 'Braid care is scalp care'
-              : userSegments.includes('transplant') ? 'Follow your surgeon'
-              : typeGroup === '4' ? 'Moisture is everything'
-              : typeGroup === '3' ? 'Deep condition weekly'
-              : typeGroup === '2' ? "Scrunch, don't rub"
-              : 'Skip heavy oils'}
-          </Text>
-          <Text style={st.tipBody}>
-            {userSegments.includes('braids') ? 'Use an applicator bottle to cleanse your scalp between braids. Heavy products cause buildup and attract lint. Keep it light.'
-              : userSegments.includes('transplant') ? 'Your surgeon knows your grafts better than any app. Follow their protocol exactly for the first 3 months. We handle the rest.'
-              : typeGroup === '4' ? 'The LOC method seals in hydration for coily hair. Apply to soaking wet hair for best results.'
-              : typeGroup === '3' ? 'Curls lose moisture fast. A weekly mask keeps them bouncy and defined.'
-              : typeGroup === '2' ? 'Scrunching with a microfibre towel encourages wave pattern. Rubbing creates frizz.'
-              : 'Straight hair gets weighed down fast. Use lightweight serums and spray-in conditioners.'}
-          </Text>
-        </LinearGradient>
-      </Animated.View>
-
-    </ScrollView>
+      <XpToast amount={toastAmount} visible={toastVisible} />
+    </View>
   );
 }
 
-// ═════════════════════════════════════════════════════════════════
-// STYLES
-// ═════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+// Styles — cream/porcelain editorial. Fraunces display, Sora caps,
+// Inter body. Gold (lime) for labels only. Violet for action.
+// ═══════════════════════════════════════════════════════════════
+
 const st = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.porcelain },
-  scroll: { paddingTop: Platform.OS === 'ios' ? 62 : 48, paddingBottom: 110 },
-
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: 20, marginBottom: 20 },
-  greeting: { fontFamily: Fonts.body, fontSize: 13, color: Colors.muted, marginBottom: 2 },
-  title: { fontFamily: Fonts.heading, fontSize: 24, color: Colors.ink, letterSpacing: -0.5 },
-  headerRight: { alignItems: 'flex-end', gap: 6 },
-  xpBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(138,184,0,0.12)', paddingVertical: 4, paddingHorizontal: 10, borderRadius: 10 },
-  xpBadgeText: { fontFamily: Fonts.bodySemi, fontSize: 12, color: '#5a6b00' },
-  streakBadge: { alignItems: 'center', backgroundColor: 'rgba(118,67,172,0.08)', paddingVertical: 6, paddingHorizontal: 14, borderRadius: 16 },
-  streakLabel: { fontFamily: Fonts.body, fontSize: 9, color: Colors.violet, textTransform: 'uppercase', letterSpacing: 1 },
-  streakNum: { fontFamily: Fonts.heading, fontSize: 18, color: Colors.violet },
-
-  // XP toast
-  xpToast: {
-    position: 'absolute', top: Platform.OS === 'ios' ? 100 : 80, alignSelf: 'center', zIndex: 999,
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: Colors.ink, paddingVertical: 10, paddingHorizontal: 20, borderRadius: 24,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 12, elevation: 8,
+  scroll: {
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    paddingHorizontal: 24,
+    paddingBottom: 120,
   },
-  xpToastText: { fontFamily: Fonts.headingSemi, fontSize: 16, color: '#fff' },
 
-  // Routine tag
-  routineTag: { marginHorizontal: 20, marginBottom: 12, paddingVertical: 8, paddingHorizontal: 14, backgroundColor: 'rgba(118,67,172,0.06)', borderRadius: 10 },
-  routineTagText: { fontFamily: Fonts.body, fontSize: 11, color: Colors.violet, lineHeight: 16 },
+  // ── 1. Masthead
+  masthead: { marginBottom: 28 },
+  mastheadTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  dateLabel: {
+    fontFamily: 'Sora_500Medium',
+    fontSize: 10,
+    letterSpacing: 2.5,
+    color: Colors.muted,
+  },
+  streakPill: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 5,
+    backgroundColor: Colors.violetBg2,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  streakText: {
+    fontFamily: 'Fraunces_700Bold',
+    fontSize: 14,
+    color: Colors.violet,
+  },
+  streakLabel: {
+    fontFamily: Fonts.body,
+    fontSize: 10,
+    letterSpacing: 0.5,
+    color: Colors.violet,
+  },
+  greeting: {
+    fontFamily: 'Fraunces_700Bold',
+    fontSize: 34,
+    color: Colors.ink,
+    letterSpacing: -1.2,
+    lineHeight: 40,
+  },
 
-  tryCard: { marginHorizontal: 20, borderRadius: 20, padding: 22, marginBottom: 20, flexDirection: 'row', overflow: 'hidden' },
-  tryContent: { flex: 1 },
-  tryTitle: { fontFamily: Fonts.heading, fontSize: 18, color: '#fff', marginBottom: 6 },
-  tryDesc: { fontFamily: Fonts.body, fontSize: 12, color: 'rgba(255,255,255,0.75)', lineHeight: 18, marginBottom: 14, maxWidth: 220 },
-  tryBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#fff', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 12, alignSelf: 'flex-start' },
-  tryBtnText: { fontFamily: Fonts.bodySemi, fontSize: 13, color: '#7643AC' },
-  tryDecor: { position: 'absolute', right: 16, top: 10, opacity: 0.4 },
+  // ── Shared editorial label (gold caps)
+  editorialLabel: {
+    fontFamily: 'Sora_500Medium',
+    fontSize: 10,
+    letterSpacing: 2.5,
+    color: Colors.violet,
+    marginBottom: 8,
+  },
+  goldLabel: {
+    fontFamily: 'Sora_500Medium',
+    fontSize: 10,
+    letterSpacing: 2.5,
+    color: '#8AB800',
+    marginBottom: 8,
+  },
 
-  tracker: { marginHorizontal: 20, marginBottom: 24, borderRadius: 20, borderWidth: 1.5, borderColor: Colors.border, overflow: 'hidden' },
-  trackerInner: { padding: 20 },
-  trackerTop: { flexDirection: 'row', alignItems: 'center', gap: 20, marginBottom: 20 },
-  trackerInfo: { flex: 1 },
-  trackerDay: { fontFamily: Fonts.heading, fontSize: 20, color: Colors.ink },
-  trackerLabel: { fontFamily: Fonts.bodyMedium, fontSize: 13, color: Colors.violet, marginTop: 2 },
-  trackerSub: { fontFamily: Fonts.body, fontSize: 12, color: Colors.muted, marginTop: 4 },
-  doneBadge: { marginTop: 8, backgroundColor: 'rgba(138,184,0,0.12)', paddingVertical: 4, paddingHorizontal: 12, borderRadius: 10, alignSelf: 'flex-start' },
-  doneText: { fontFamily: Fonts.bodySemi, fontSize: 11, color: '#5a6b00' },
+  // ── 2. Hero (today)
+  heroCard: {
+    backgroundColor: Colors.white,
+    borderRadius: Radius.lg,
+    padding: 22,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    shadowColor: Colors.violet,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    elevation: 1,
+  },
+  heroTitle: {
+    fontFamily: 'Fraunces_700Bold',
+    fontSize: 30,
+    color: Colors.ink,
+    letterSpacing: -1,
+    lineHeight: 36,
+    marginBottom: 4,
+  },
+  heroSubtitle: {
+    fontFamily: Fonts.body,
+    fontSize: 12,
+    color: Colors.muted,
+    marginBottom: 18,
+  },
 
-  weekRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  dayCol: { alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 6, borderRadius: 12 },
-  dayColActive: { backgroundColor: 'rgba(118,67,172,0.08)' },
-  dayText: { fontFamily: Fonts.bodyMedium, fontSize: 11, color: Colors.muted },
-  dayTextActive: { color: Colors.violet, fontFamily: Fonts.bodySemi },
-  dayDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.border },
-  dayDotDone: { backgroundColor: '#8AB800', width: 8, height: 8, borderRadius: 4 },
-  dayDotPartial: { backgroundColor: Colors.lavender },
-  dayDotToday: { borderWidth: 1.5, borderColor: Colors.violet, backgroundColor: 'transparent' },
+  steps: { gap: 12 },
+  stepRow: {
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'flex-start',
+    paddingVertical: 8,
+  },
+  stepCheck: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    backgroundColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  stepCheckDone: {
+    backgroundColor: Colors.violet,
+    borderColor: Colors.violet,
+  },
+  stepName: {
+    fontFamily: 'Fraunces_500Medium',
+    fontSize: 15,
+    color: Colors.ink,
+    letterSpacing: -0.2,
+  },
+  stepNameDone: {
+    color: Colors.muted,
+    textDecorationLine: 'line-through',
+  },
+  stepDesc: {
+    fontFamily: Fonts.body,
+    fontSize: 12,
+    lineHeight: 18,
+    color: Colors.muted,
+    marginTop: 2,
+  },
+  stepDescDone: { opacity: 0.5 },
+  moreSteps: {
+    fontFamily: Fonts.body,
+    fontSize: 12,
+    fontStyle: 'italic',
+    color: Colors.violet,
+    marginTop: 4,
+  },
 
-  section: { fontFamily: Fonts.headingSemi, fontSize: 17, color: Colors.ink, paddingHorizontal: 20, marginBottom: 12 },
+  progressTrack: {
+    height: 2,
+    backgroundColor: Colors.violetBg,
+    borderRadius: 1,
+    marginTop: 18,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: Colors.violet,
+  },
 
-  steps: { paddingHorizontal: 20, gap: 8, marginBottom: 28 },
-  step: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, backgroundColor: Colors.white, borderRadius: Radius.lg, borderWidth: 1.5, borderColor: Colors.border },
-  stepDone: { borderColor: 'rgba(138,184,0,0.25)', backgroundColor: 'rgba(138,184,0,0.03)' },
-  stepNum: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#F7F5FB', alignItems: 'center', justifyContent: 'center' },
-  stepNumDone: { backgroundColor: Colors.violet },
-  stepNumText: { fontFamily: Fonts.headingSemi, fontSize: 14, color: Colors.violet },
-  stepBody: { flex: 1 },
-  stepName: { fontFamily: Fonts.bodySemi, fontSize: 14, color: Colors.ink, marginBottom: 2 },
-  stepNameDone: { textDecorationLine: 'line-through', opacity: 0.4 },
-  stepDesc: { fontFamily: Fonts.body, fontSize: 11, color: Colors.muted, lineHeight: 16 },
-  stepXp: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: 'rgba(118,67,172,0.06)', paddingVertical: 4, paddingHorizontal: 8, borderRadius: 8 },
-  stepXpText: { fontFamily: Fonts.bodySemi, fontSize: 10, color: Colors.violet },
+  // ── 3. Today's note
+  noteCard: {
+    backgroundColor: 'rgba(118,67,172,0.04)',
+    borderRadius: Radius.lg,
+    padding: 22,
+    marginBottom: 16,
+    borderLeftWidth: 3,
+    borderLeftColor: Colors.violet,
+  },
+  noteLabel: {
+    fontFamily: 'Sora_500Medium',
+    fontSize: 10,
+    letterSpacing: 2.5,
+    color: Colors.violet,
+    marginBottom: 10,
+  },
+  noteText: {
+    fontFamily: 'Fraunces_400Regular_Italic',
+    fontSize: 17,
+    lineHeight: 26,
+    color: Colors.ink,
+    letterSpacing: -0.2,
+  },
 
-  prodRow: { paddingHorizontal: 20, gap: 12, paddingBottom: 4, marginBottom: 24 },
-  prodCard: { width: width * 0.62, backgroundColor: Colors.white, borderRadius: Radius.lg, padding: 18, borderWidth: 1.5, borderColor: Colors.border },
-  prodTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  prodBrand: { fontFamily: Fonts.body, fontSize: 10, color: Colors.violet, textTransform: 'uppercase', letterSpacing: 0.5 },
-  prodPrice: { fontFamily: Fonts.headingSemi, fontSize: 15, color: Colors.ink },
-  prodName: { fontFamily: Fonts.headingSemi, fontSize: 15, color: Colors.ink, marginBottom: 6, lineHeight: 20 },
-  prodWhy: { fontFamily: Fonts.body, fontSize: 11, color: Colors.muted, lineHeight: 16, marginBottom: 12 },
-  prodFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  prodRetailer: { fontFamily: Fonts.body, fontSize: 10, color: Colors.muted },
-  prodLink: { fontFamily: Fonts.bodySemi, fontSize: 12, color: Colors.violet },
+  // ── 4. Your rhythm
+  rhythmCard: {
+    backgroundColor: Colors.white,
+    borderRadius: Radius.lg,
+    padding: 22,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  rhythmRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  rhythmCol: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  rhythmNum: {
+    fontFamily: 'Fraunces_700Bold',
+    fontSize: 32,
+    color: Colors.ink,
+    letterSpacing: -1.5,
+    lineHeight: 36,
+  },
+  rhythmLabel: {
+    fontFamily: Fonts.body,
+    fontSize: 10,
+    letterSpacing: 0.6,
+    color: Colors.muted,
+    marginTop: 4,
+    textTransform: 'lowercase',
+  },
+  rhythmDivider: {
+    width: 1,
+    height: 36,
+    backgroundColor: Colors.border,
+  },
 
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingRight: 20 },
-  seeAll: { fontFamily: Fonts.bodySemi, fontSize: 13, color: Colors.violet },
-  typeTag: { backgroundColor: '#F7F5FB', paddingVertical: 4, paddingHorizontal: 10, borderRadius: 10 },
-  typeTagText: { fontFamily: Fonts.bodySemi, fontSize: 10, color: Colors.ink },
+  // ── 5. Full routine
+  routineCard: {
+    backgroundColor: Colors.white,
+    borderRadius: Radius.lg,
+    padding: 22,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  routineHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  routineTitle: {
+    fontFamily: 'Fraunces_600SemiBold',
+    fontSize: 18,
+    color: Colors.ink,
+    letterSpacing: -0.4,
+  },
+  chevWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.violetBg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    transform: [{ rotate: '0deg' }],
+  },
+  chevWrapOpen: {
+    transform: [{ rotate: '90deg' }],
+  },
+  routineWeek: {
+    marginTop: 18,
+    gap: 2,
+  },
+  dayRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.violetBg,
+  },
+  dayRowToday: {
+    backgroundColor: Colors.violetBg,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginHorizontal: -8,
+    borderBottomWidth: 0,
+  },
+  dayName: {
+    fontFamily: 'Sora_500Medium',
+    fontSize: 12,
+    color: Colors.muted,
+    width: 44,
+    letterSpacing: 0.8,
+  },
+  dayNameToday: { color: Colors.violet },
+  dayLabel: {
+    flex: 1,
+    fontFamily: 'Fraunces_500Medium',
+    fontSize: 14,
+    color: Colors.ink,
+  },
+  dayLabelToday: {
+    fontFamily: 'Fraunces_700Bold',
+  },
+  dayStepCount: {
+    fontFamily: Fonts.body,
+    fontSize: 11,
+    color: Colors.muted,
+  },
 
-  creatorScroll: { paddingHorizontal: 20, gap: 12, paddingBottom: 4, marginBottom: 28 },
-  creatorCard: { width: 170, backgroundColor: Colors.white, borderRadius: 18, borderWidth: 1.5, borderColor: Colors.border, overflow: 'hidden' },
-  creatorImgArea: { height: 120, justifyContent: 'flex-end', padding: 14 },
-  creatorAvatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.white, borderWidth: 2, borderColor: Colors.white, alignItems: 'center', justifyContent: 'center' },
-  creatorInitials: { fontFamily: Fonts.heading, fontSize: 13, color: Colors.violet },
-  creatorInfo: { padding: 14, paddingTop: 10 },
-  creatorName: { fontFamily: Fonts.headingSemi, fontSize: 14, color: Colors.ink, marginBottom: 1 },
-  creatorHandle: { fontFamily: Fonts.body, fontSize: 11, color: Colors.muted, marginBottom: 6 },
-  creatorSpec: { fontFamily: Fonts.body, fontSize: 11, color: Colors.muted, lineHeight: 16, marginBottom: 10 },
-  creatorBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  creatorFollowers: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  creatorFollowerText: { fontFamily: Fonts.bodySemi, fontSize: 11, color: Colors.ink },
+  // ── 6. Pick of the day
+  pickCard: {
+    backgroundColor: '#FAFCE8',
+    borderRadius: Radius.lg,
+    padding: 22,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(138,184,0,0.18)',
+  },
+  pickTitle: {
+    fontFamily: 'Fraunces_700Bold',
+    fontSize: 22,
+    color: Colors.ink,
+    letterSpacing: -0.5,
+    marginBottom: 4,
+  },
+  pickBrand: {
+    fontFamily: Fonts.body,
+    fontStyle: 'italic',
+    fontSize: 12,
+    color: '#8AB800',
+    marginBottom: 12,
+  },
+  pickBody: {
+    fontFamily: Fonts.body,
+    fontSize: 13,
+    lineHeight: 20,
+    color: Colors.ink,
+    opacity: 0.78,
+    marginBottom: 16,
+  },
+  pickCta: {
+    alignSelf: 'flex-start',
+  },
+  pickCtaText: {
+    fontFamily: 'Sora_500Medium',
+    fontSize: 12,
+    color: '#7643AC',
+    letterSpacing: 0.3,
+  },
 
-  styleGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, paddingHorizontal: 20, marginBottom: 28 },
-  styleCard: { width: (width - 52) / 2, backgroundColor: Colors.white, borderRadius: 18, borderWidth: 1.5, borderColor: Colors.border, overflow: 'hidden' },
-  styleImgArea: { height: 140, position: 'relative' },
-  styleBookmark: { position: 'absolute', top: 10, right: 10, width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.9)', alignItems: 'center', justifyContent: 'center' },
-  styleTimeBadge: { position: 'absolute', bottom: 10, left: 10, paddingVertical: 3, paddingHorizontal: 10, borderRadius: 8, backgroundColor: 'rgba(0,0,0,0.5)' },
-  styleTimeText: { fontFamily: Fonts.bodySemi, fontSize: 10, color: '#fff' },
-  styleInfo: { padding: 12 },
-  styleName: { fontFamily: Fonts.bodySemi, fontSize: 13, color: Colors.ink, marginBottom: 6 },
-  styleBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  styleSaves: { fontFamily: Fonts.body, fontSize: 11, color: Colors.muted },
-  styleTags: { flexDirection: 'row', gap: 4 },
+  // ── 7. Salons
+  salonsSection: { marginBottom: 16 },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    marginBottom: 12,
+  },
+  seeAll: {
+    fontFamily: 'Sora_500Medium',
+    fontSize: 11,
+    color: Colors.violet,
+    letterSpacing: 0.3,
+  },
+  salonCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.white,
+    borderRadius: Radius.lg,
+    padding: 14,
+    marginBottom: 8,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  salonInitials: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: Colors.violetBg2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  salonInitialsText: {
+    fontFamily: 'Fraunces_700Bold',
+    fontSize: 14,
+    color: Colors.violet,
+    letterSpacing: -0.3,
+  },
+  salonName: {
+    fontFamily: 'Fraunces_600SemiBold',
+    fontSize: 15,
+    color: Colors.ink,
+    marginBottom: 4,
+    letterSpacing: -0.2,
+  },
+  salonMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  salonArea: {
+    fontFamily: Fonts.body,
+    fontSize: 11,
+    color: Colors.muted,
+  },
+  salonDot: {
+    fontFamily: Fonts.body,
+    fontSize: 11,
+    color: Colors.muted,
+  },
+  salonRating: {
+    fontFamily: 'Sora_500Medium',
+    fontSize: 11,
+    color: Colors.ink,
+  },
 
-  salonList: { paddingHorizontal: 20, gap: 10, marginBottom: 28 },
-  salonCard: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, backgroundColor: Colors.white, borderRadius: 18, borderWidth: 1.5, borderColor: Colors.border },
-  salonAvatar: { width: 52, height: 52, borderRadius: 14, backgroundColor: '#F7F5FB', alignItems: 'center', justifyContent: 'center' },
-  salonInitials: { fontFamily: Fonts.heading, fontSize: 15, color: Colors.violet },
-  salonBody: { flex: 1 },
-  salonName: { fontFamily: Fonts.headingSemi, fontSize: 14, color: Colors.ink, marginBottom: 3 },
-  salonLocRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 },
-  salonArea: { fontFamily: Fonts.body, fontSize: 12, color: Colors.muted },
-  salonMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  salonRating: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  salonRatingText: { fontFamily: Fonts.headingSemi, fontSize: 13, color: Colors.ink },
-  salonReviewCount: { fontFamily: Fonts.body, fontSize: 11, color: Colors.muted },
+  // ── 8. Closer
+  closer: {
+    marginTop: 8,
+    paddingHorizontal: 20,
+  },
+  closerText: {
+    fontFamily: 'Fraunces_400Regular_Italic',
+    fontSize: 13,
+    lineHeight: 20,
+    color: Colors.muted,
+    textAlign: 'center',
+  },
 
-  tip: { marginHorizontal: 20, borderRadius: 20, padding: 22, marginBottom: 20 },
-  tipBadge: { backgroundColor: 'rgba(217,255,0,0.15)', paddingVertical: 3, paddingHorizontal: 10, borderRadius: 8, alignSelf: 'flex-start', marginBottom: 10 },
-  tipBadgeText: { fontFamily: Fonts.bodyBold, fontSize: 9, color: Colors.lime, letterSpacing: 0.8, textTransform: 'uppercase' },
-  tipTitle: { fontFamily: Fonts.headingSemi, fontSize: 16, color: Colors.porcelain, marginBottom: 6 },
-  tipBody: { fontFamily: Fonts.body, fontSize: 13, color: 'rgba(255,255,255,0.75)', lineHeight: 20 },
+  // XP Toast
+  toast: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 100 : 80,
+    alignSelf: 'center',
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: Colors.violet,
+    shadowColor: Colors.violet,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+  toastText: {
+    fontFamily: 'Fraunces_700Bold',
+    fontSize: 14,
+    color: Colors.white,
+    letterSpacing: -0.2,
+  },
 });

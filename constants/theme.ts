@@ -97,9 +97,9 @@ export const Energy = {
 //   label     = uppercase letterspaced microcopy
 //   index     = editorial section markers ("01 / 04")
 export const Fonts = {
-  heading: 'Sora_700Bold',
-  headingSemi: 'Sora_600SemiBold',
-  headingMedium: 'Sora_500Medium',
+  heading: 'Fraunces_700Bold',
+  headingSemi: 'Fraunces_600SemiBold',
+  headingMedium: 'Fraunces_500Medium',
   body: 'Inter_400Regular',
   bodyMedium: 'Inter_500Medium',
   bodySemi: 'Inter_600SemiBold',
@@ -108,21 +108,21 @@ export const Fonts = {
 
 export const Type = {
   display: {
-    fontFamily: 'Sora_700Bold',
+    fontFamily: 'Fraunces_700Bold',
     fontSize: 32,
     letterSpacing: -1,
     lineHeight: 38,
     color: '#332463',
   },
   title: {
-    fontFamily: 'Sora_700Bold',
+    fontFamily: 'Fraunces_700Bold',
     fontSize: 22,
     letterSpacing: -0.5,
     lineHeight: 28,
     color: '#332463',
   },
   headline: {
-    fontFamily: 'Sora_600SemiBold',
+    fontFamily: 'Fraunces_600SemiBold',
     fontSize: 16,
     letterSpacing: -0.2,
     lineHeight: 22,

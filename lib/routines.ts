@@ -627,19 +627,22 @@ export async function getUserRoutineSteps(
 // Toggle completion for a step on a given date (default: today).
 // - completed = true  → insert routine_completions row (or do nothing
 //                       if already present for that date). Awards XP
-//                       via the 'complete_routine_step' action. The
-//                       step_id is passed as p_reference_id so the
-//                       award_xp DB function naturally prevents double-
-//                       awarding for the same step on the same day.
+//                       via the 'complete_routine_step' action, but
+//                       only if no XP has already been awarded for this
+//                       (user, step, day) — see dedup note below.
 // - completed = false → delete the routine_completions row for that
 //                       step on that date. (Does NOT refund XP — the
-//                       award_xp ledger is append-only. If a user
-//                       unchecks-then-rechecks, no new XP is awarded
-//                       because dedup is by reference_id.)
+//                       xp_ledger is append-only. If a user unchecks-
+//                       then-rechecks, no new XP is awarded because
+//                       our app-side dedup catches it.)
 //
-// Returns: number of XP awarded by this call (0 if uncheck, capped,
-// duplicate, or auth failure). Returns -1 on DB error so callers can
-// distinguish "no XP awarded" from "the toggle failed".
+// Dedup note: the award_xp DB function does NOT dedup by reference_id;
+// it only enforces a daily_cap on row count. So this function checks
+// xp_ledger itself for a same-day same-step row before awarding.
+//
+// Returns: number of XP awarded by this call (0 if uncheck, already-
+// awarded-today, daily-capped, or auth failure). Returns -1 on DB
+// error so callers can distinguish "no XP awarded" from "toggle failed".
 //
 // All three NOT NULL ids (user_id, routine_id, step_id) are supplied.
 //
@@ -688,12 +691,38 @@ export async function markStepComplete(
         return -1;
       }
 
-      // Award XP. Dedup is enforced DB-side via p_reference_id.
-      // We use stepId + date so the same step on different days each
-      // award once. If award_xp doesn't already include date in its
-      // dedup, this composite key prevents accidental double-awarding.
-      const refId = `${stepId}:${dateStr}`;
-      const xp = await awardXp('complete_routine_step', refId, 'Completed routine step');
+      // Award XP — but first dedup ourselves.
+      //
+      // Important: award_xp (the DB function) does NOT dedup by reference_id.
+      // It only enforces a daily_cap on row count. Without our own check,
+      // toggling a step on → off → on would award XP twice (consuming
+      // the daily cap). p_reference_id is also typed `uuid`, so the
+      // raw stepId goes in unchanged — no composite keys.
+      //
+      // Dedup rule: one XP award per (user, step, day). Implemented by
+      // checking xp_ledger for an existing row with this reference_id
+      // dated today before calling award_xp.
+      let xp = 0;
+      const dayStart = `${dateStr}T00:00:00`;
+      const dayEnd = `${dateStr}T23:59:59`;
+      const { data: priorLedger, error: ledgerErr } = await supabase
+        .from('xp_ledger')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('action', 'complete_routine_step')
+        .eq('reference_id', stepId)
+        .gte('created_at', dayStart)
+        .lte('created_at', dayEnd)
+        .limit(1);
+
+      if (ledgerErr) {
+        // Ledger read failed — log but don't fail the toggle. Worst case
+        // is we skip XP award; the completion row is still saved.
+        console.log('markStepComplete: ledger check failed:', ledgerErr.message);
+      } else if (!priorLedger || priorLedger.length === 0) {
+        xp = await awardXp('complete_routine_step', stepId, 'Completed routine step');
+      }
+      // else: already awarded today, xp stays 0.
 
       // Invalidate completion caches so next read is fresh.
       await AsyncStorage.removeItem(CACHE_COMPLETIONS_TODAY(userId)).catch(() => {});

@@ -537,6 +537,12 @@ export default function QuizScreen() {
           p_description: 'Completed hair discovery quiz',
           p_override_amount: null,
         });
+        // Bootstrap the user's routine in Supabase now that we have
+        // their goals + segments. Idempotent — safe to re-run on Home
+        // open as a defensive guard. Fails silently if Supabase is
+        // unreachable; the next bootstrap attempt will retry.
+        const { bootstrapUserRoutine } = require('@/lib/routines');
+        await bootstrapUserRoutine(user.id, goals, segments);
       }
     } catch (e) {
       // intentional silent

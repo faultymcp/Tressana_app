@@ -20,6 +20,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
+import { awardXp } from './xp';
 
 export type RoutineStep = {
   id: string;
@@ -29,6 +30,10 @@ export type RoutineStep = {
   xp: number;
   pro_tip?: string;
   recommended_categories?: string[];
+  // Populated when the step comes from the user layer (getUserRoutineSteps).
+  // Needed so the UI can call markStepComplete(userId, routine_id, step_id).
+  // Optional because the template layer (fetchRoutineFromDB) doesn't have it.
+  routine_id?: string;
 };
 
 export type DayPlan = {
@@ -596,6 +601,7 @@ export async function getUserRoutineSteps(
             xp: s.xp,
             pro_tip: s.pro_tip,
             recommended_categories: s.recommended_categories,
+            routine_id: s.routine_id,
           });
         }
       }
@@ -620,9 +626,20 @@ export async function getUserRoutineSteps(
 //
 // Toggle completion for a step on a given date (default: today).
 // - completed = true  → insert routine_completions row (or do nothing
-//                       if already present for that date).
+//                       if already present for that date). Awards XP
+//                       via the 'complete_routine_step' action. The
+//                       step_id is passed as p_reference_id so the
+//                       award_xp DB function naturally prevents double-
+//                       awarding for the same step on the same day.
 // - completed = false → delete the routine_completions row for that
-//                       step on that date.
+//                       step on that date. (Does NOT refund XP — the
+//                       award_xp ledger is append-only. If a user
+//                       unchecks-then-rechecks, no new XP is awarded
+//                       because dedup is by reference_id.)
+//
+// Returns: number of XP awarded by this call (0 if uncheck, capped,
+// duplicate, or auth failure). Returns -1 on DB error so callers can
+// distinguish "no XP awarded" from "the toggle failed".
 //
 // All three NOT NULL ids (user_id, routine_id, step_id) are supplied.
 //
@@ -632,9 +649,9 @@ export async function markStepComplete(
   stepId: string,
   completed: boolean,
   dateISO?: string,
-): Promise<boolean> {
+): Promise<number> {
   try {
-    if (!userId || !routineId || !stepId) return false;
+    if (!userId || !routineId || !stepId) return -1;
     const dateStr = dateISO || todayISO();
 
     if (completed) {
@@ -652,10 +669,10 @@ export async function markStepComplete(
 
       if (chkErr) {
         console.log('markStepComplete: check failed:', chkErr.message);
-        return false;
+        return -1;
       }
       if (existing && existing.length > 0) {
-        return true; // already complete
+        return 0; // already complete, no new XP
       }
 
       const { error: insErr } = await supabase
@@ -668,8 +685,20 @@ export async function markStepComplete(
         });
       if (insErr) {
         console.log('markStepComplete: insert failed:', insErr.message);
-        return false;
+        return -1;
       }
+
+      // Award XP. Dedup is enforced DB-side via p_reference_id.
+      // We use stepId + date so the same step on different days each
+      // award once. If award_xp doesn't already include date in its
+      // dedup, this composite key prevents accidental double-awarding.
+      const refId = `${stepId}:${dateStr}`;
+      const xp = await awardXp('complete_routine_step', refId, 'Completed routine step');
+
+      // Invalidate completion caches so next read is fresh.
+      await AsyncStorage.removeItem(CACHE_COMPLETIONS_TODAY(userId)).catch(() => {});
+      await AsyncStorage.removeItem(CACHE_COMPLETIONS_WEEK(userId)).catch(() => {});
+      return xp;
     } else {
       const { error: delErr } = await supabase
         .from('routine_completions')
@@ -681,17 +710,17 @@ export async function markStepComplete(
         .lte('completed_at', `${dateStr}T23:59:59`);
       if (delErr) {
         console.log('markStepComplete: delete failed:', delErr.message);
-        return false;
+        return -1;
       }
-    }
 
-    // Invalidate completion caches so next read is fresh.
-    await AsyncStorage.removeItem(CACHE_COMPLETIONS_TODAY(userId)).catch(() => {});
-    await AsyncStorage.removeItem(CACHE_COMPLETIONS_WEEK(userId)).catch(() => {});
-    return true;
+      // Invalidate completion caches so next read is fresh.
+      await AsyncStorage.removeItem(CACHE_COMPLETIONS_TODAY(userId)).catch(() => {});
+      await AsyncStorage.removeItem(CACHE_COMPLETIONS_WEEK(userId)).catch(() => {});
+      return 0;
+    }
   } catch (e) {
     console.log('markStepComplete threw:', e);
-    return false;
+    return -1;
   }
 }
 

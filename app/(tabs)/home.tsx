@@ -35,6 +35,16 @@ import Animated, { FadeInUp, FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { Colors, Fonts, Radius } from '@/constants/theme';
 import { supabase } from '@/lib/supabase';
+import {
+  bootstrapUserRoutine,
+  fetchRoutineFromDB,
+  getUserRoutineSteps,
+  markStepComplete,
+  getTodayCompletions,
+  getCurrentUserId,
+  type RoutineStep as LibRoutineStep,
+  type WeekPlan as LibWeekPlan,
+} from '@/lib/routines';
 
 const { width } = Dimensions.get('window');
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -42,7 +52,10 @@ const todayIdx = () => { const d = new Date().getDay(); return d === 0 ? 6 : d -
 const todayLabel = () => DAYS[todayIdx()];
 
 // ─── Types ───────────────────────────────────────────────────────
-type Step = { id: string; name: string; desc: string; xp?: number };
+// Types come from lib/routines.ts so that home + routine + lib all
+// agree on shape. Local screen still uses `Step`/`DayPlan` names for
+// readability, but they're the same objects as the lib layer.
+type Step = LibRoutineStep;
 type DayPlan = { label: string; steps: Step[] };
 
 // ─── Icons (small set, reused across the screen) ──────────────────
@@ -78,70 +91,26 @@ function dateMasthead(): string {
   return `${day} · ${dayNum} ${month}`;
 }
 
-// ─── Build week routine from DB ──────────────────────────────────
-async function buildWeekFromDB(goals: string[], segments: string[]): Promise<Record<string, DayPlan> | null> {
-  try {
-    const goalMap: Record<string, string> = {
-      moisture: 'retain_moisture', growth: 'grow_hair', definition: 'define_curls',
-      frizz: 'reduce_breakage', scalp_goal: 'scalp_health', damage: 'heat_damage_recovery',
-      grow_hair: 'grow_hair', retain_moisture: 'retain_moisture', reduce_breakage: 'reduce_breakage',
-      scalp_health: 'scalp_health', define_curls: 'define_curls', protective_styling: 'protective_styling',
-      heat_damage_recovery: 'heat_damage_recovery', transplant_recovery: 'transplant_recovery',
-      postpartum_recovery: 'postpartum_recovery', transition_natural: 'transition_natural',
-      maintain_colour: 'maintain_colour', thicken_hair: 'thicken_hair',
-    };
-    const dbGoals = goals.map(g => goalMap[g] || g).filter(Boolean);
-    if (dbGoals.length === 0) return null;
-    const { data: templates, error } = await supabase
-      .from('routine_templates').select('*').in('goal', dbGoals).order('goal').order('step_order');
-    if (error || !templates || templates.length === 0) return null;
-    const relevant = templates.filter(t => !t.segment || segments.includes(t.segment));
-    const deduped: typeof relevant = [];
-    const seen = new Set<string>();
-    for (const t of relevant) { if (t.segment) { seen.add(`${t.goal}-${t.step_order}`); deduped.push(t); } }
-    for (const t of relevant) { if (!t.segment && !seen.has(`${t.goal}-${t.step_order}`)) deduped.push(t); }
-    if (deduped.length === 0) return null;
-    const freqDays: Record<string, string[]> = {
-      daily: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],
-      every_other_day: ['Mon','Wed','Fri','Sun'],
-      twice_weekly: ['Tue','Fri'],
-      weekly: ['Sat'], biweekly: ['Sat'], monthly: ['Sat'], as_needed: [],
-    };
-    const week: Record<string, DayPlan> = {};
-    for (const day of DAYS) {
-      const daySteps: Step[] = [];
-      for (const t of deduped) {
-        const scheduled = freqDays[t.frequency] || [];
-        if (scheduled.includes(day)) {
-          daySteps.push({ id: t.id, name: t.step_name, desc: t.step_description || '', xp: 10 });
-        }
-      }
-      if (!daySteps.find(s => s.name.toLowerCase().includes('night'))) {
-        daySteps.push({ id: `protect-${day}`, name: 'Night protection', desc: 'Satin bonnet or pillowcase', xp: 10 });
-      }
-      const label = daySteps.length > 4 ? 'Wash day'
-        : daySteps.length > 2 ? 'Style day'
-        : 'Refresh day';
-      week[day] = { label, steps: daySteps };
-    }
-    return week;
-  } catch (e) { return null; }
-}
-
 // ─── Fallback routine ────────────────────────────────────────────
+// Used only when both the user layer (Supabase per-user routine) and the
+// template layer (Supabase routine_templates) fail or return nothing —
+// e.g. guest mode with no network. Step shape must satisfy lib RoutineStep,
+// so `frequency` and `xp` are required.
 function buildWeekFallback(): Record<string, DayPlan> {
-  const refresh: Step = { id: 'moisturise', name: 'Moisturise', desc: 'Light leave-in or water-based spray' };
-  const protect: Step = { id: 'protect', name: 'Night protection', desc: 'Satin bonnet or pillowcase' };
+  const mk = (id: string, name: string, desc: string, frequency = 'daily'): Step =>
+    ({ id, name, desc, frequency, xp: 10 });
+  const refresh = mk('moisturise', 'Moisturise', 'Light leave-in or water-based spray');
+  const protect = mk('protect', 'Night protection', 'Satin bonnet or pillowcase');
   const refreshDay = { label: 'Refresh day', steps: [refresh, protect] };
   const styleDay = { label: 'Style day', steps: [
-    { id: 'moisturise', name: 'Moisturise + restyle', desc: 'Refresh curls or smooth waves' },
+    mk('moisturise-restyle', 'Moisturise + restyle', 'Refresh curls or smooth waves'),
     refresh, protect,
   ]};
   const washDay = { label: 'Wash day', steps: [
-    { id: 'cleanse', name: 'Cleanse', desc: 'Gentle shampoo on scalp' },
-    { id: 'condition', name: 'Condition', desc: 'Mid-length to ends, detangle' },
-    { id: 'deep', name: 'Deep condition', desc: 'Mask for 20 minutes' },
-    { id: 'style', name: 'Style', desc: 'Apply styling products to wet hair' },
+    mk('cleanse', 'Cleanse', 'Gentle shampoo on scalp', 'weekly'),
+    mk('condition', 'Condition', 'Mid-length to ends, detangle', 'weekly'),
+    mk('deep', 'Deep condition', 'Mask for 20 minutes', 'weekly'),
+    mk('style', 'Style', 'Apply styling products to wet hair', 'weekly'),
     protect,
   ]};
   return {
@@ -265,13 +234,41 @@ export default function HomeScreen() {
       setSegments(segs);
       setPorosity(por);
 
-      // Build routine
-      const dbPlan = await buildWeekFromDB(goals, segs);
-      setWeekPlan(dbPlan || buildWeekFallback());
+      // Build routine — try the user layer (Supabase per-user copy) first,
+      // fall back to the template layer / local fallback if unauthenticated
+      // or DB is unreachable.
+      const userId = await getCurrentUserId();
+      let dbPlan: Record<string, DayPlan> | null = null;
 
-      // Checks (completed steps per day)
+      // Read local checks first so server seed (below) is authoritative.
       const checksRaw = await AsyncStorage.getItem('tressana_checks');
-      if (checksRaw) setChecks(JSON.parse(checksRaw));
+      if (checksRaw) {
+        try { setChecks(JSON.parse(checksRaw)); } catch {}
+      }
+
+      if (userId) {
+        dbPlan = await getUserRoutineSteps(userId);
+        // Home-open safety net: if authenticated but no routine in DB
+        // (e.g. user signed in AFTER completing the quiz), bootstrap now.
+        if (!dbPlan) {
+          await bootstrapUserRoutine(userId, goals, segs);
+          dbPlan = await getUserRoutineSteps(userId, { skipCache: true });
+        }
+
+        // Seed `checks` state from server-side completions so the UI
+        // shows what's actually been done today across devices.
+        const todayComps = await getTodayCompletions(userId);
+        if (todayComps.length > 0) {
+          const todayKey = todayLabel();
+          const seeded: Record<string, boolean> = {};
+          for (const c of todayComps) seeded[c.step_id] = true;
+          setChecks(prev => ({ ...prev, [todayKey]: { ...(prev[todayKey] || {}), ...seeded } }));
+        }
+      }
+
+      // Final fallback chain: user layer → template layer → local builder.
+      if (!dbPlan) dbPlan = await fetchRoutineFromDB(goals, segs);
+      setWeekPlan(dbPlan || buildWeekFallback());
 
       // Days since wash (rough estimate from check history)
       const lastWashRaw = await AsyncStorage.getItem('tressana_last_wash');
@@ -320,7 +317,10 @@ export default function HomeScreen() {
     })();
   }, []);
 
-  // Toggle a step done/undone
+  // Toggle a step done/undone.
+  // Source of truth is Supabase routine_completions (via markStepComplete).
+  // Local `checks` is kept in sync for instant UI feedback. Falls back to
+  // AsyncStorage-only mode when the user isn't authenticated.
   const toggleStep = useCallback(async (stepId: string, stepName: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     const day = todayLabel();
@@ -329,7 +329,7 @@ export default function HomeScreen() {
     dayChecks[stepId] = !wasDone;
     const updated = { ...checks, [day]: dayChecks };
     setChecks(updated);
-    await AsyncStorage.setItem('tressana_checks', JSON.stringify(updated));
+    await AsyncStorage.setItem('tressana_checks', JSON.stringify(updated)).catch(() => {});
 
     // If wash step completed, record wash date
     if (!wasDone && (stepName.toLowerCase().includes('cleanse') || stepName.toLowerCase().includes('wash') || stepName.toLowerCase().includes('shampoo'))) {
@@ -337,14 +337,21 @@ export default function HomeScreen() {
       setDaysSinceWash(0);
     }
 
-    // Award XP for completing
-    if (!wasDone) {
-      const xp = await doAwardXp('complete_routine_step', stepId, `Completed: ${stepName}`);
+    // Persist to Supabase + award XP via the lib data layer.
+    // The step's routine_id is on the Step itself (carried through from
+    // getUserRoutineSteps). If it's missing, the user is on the template
+    // fallback and we can only update locally.
+    const today = weekPlan[day];
+    const step = today?.steps.find(s => s.id === stepId);
+    const routineId = step?.routine_id;
+    const userId = await getCurrentUserId();
+
+    if (!wasDone && userId && routineId) {
+      const xp = await markStepComplete(userId, routineId, stepId, true);
       if (xp > 0) {
         setXpToday(prev => prev + xp);
         showXpToast(xp);
-        // Check if all done → bonus
-        const today = weekPlan[day];
+        // Bonus when every step for today is done
         if (today && today.steps.every(s => updated[day]?.[s.id])) {
           const bonus = await doAwardXp('complete_full_routine', undefined, 'Full routine done');
           if (bonus > 0) {
@@ -352,6 +359,23 @@ export default function HomeScreen() {
           }
         }
       }
+    } else if (!wasDone && !userId) {
+      // Local-only fallback (unauthenticated): keep old XP behaviour so
+      // the UX doesn't degrade for guests.
+      const xp = await doAwardXp('complete_routine_step', stepId, `Completed: ${stepName}`);
+      if (xp > 0) {
+        setXpToday(prev => prev + xp);
+        showXpToast(xp);
+        if (today && today.steps.every(s => updated[day]?.[s.id])) {
+          const bonus = await doAwardXp('complete_full_routine', undefined, 'Full routine done');
+          if (bonus > 0) {
+            setTimeout(() => { setXpToday(p => p + bonus); showXpToast(bonus); }, 1000);
+          }
+        }
+      }
+    } else if (wasDone && userId && routineId) {
+      // Uncheck — remove the completion in DB (no XP refund; ledger is append-only)
+      await markStepComplete(userId, routineId, stepId, false);
     }
   }, [checks, weekPlan]);
 

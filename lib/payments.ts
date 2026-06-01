@@ -35,12 +35,14 @@ async function getAccessToken(): Promise<string> {
 // ── Call the create-checkout Edge Function ────────────────────────
 async function createCheckout(body: Record<string, any>): Promise<string> {
   const token = await getAccessToken();
+  const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
 
   const response = await fetch(`${EDGE_FUNCTION_URL}/functions/v1/create-checkout`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${token}`,
+      'apikey': anonKey,
     },
     body: JSON.stringify(body),
   });

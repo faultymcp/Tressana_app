@@ -605,9 +605,14 @@ export async function getUserRoutineSteps(
           });
         }
       }
-      const label = daySteps.length > 3 ? 'Wash day'
-        : daySteps.length > 1 ? DAY_LABELS[day]?.daily || 'Maintain'
-        : 'Rest day';
+      // Label by the day's identity, not by step count. Wash day is
+      // wherever the weekly/biweekly wash steps land (Sat by FREQ_DAYS).
+      // Other days use their DAY_LABELS name; empty days are rest days.
+      const hasWashStep = daySteps.some(s =>
+        s.frequency === 'weekly' || s.frequency === 'biweekly');
+      const label = daySteps.length === 0 ? 'Rest day'
+        : hasWashStep ? (DAY_LABELS[day]?.weekly || 'Wash day')
+        : (DAY_LABELS[day]?.daily || 'Maintain');
       week[day] = { label, steps: daySteps };
     }
 

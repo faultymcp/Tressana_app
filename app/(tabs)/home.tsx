@@ -208,6 +208,7 @@ export default function HomeScreen() {
   const [toastAmount, setToastAmount] = useState(0);
   const [toastVisible, setToastVisible] = useState(false);
   const [routineExpanded, setRoutineExpanded] = useState(false);
+  const [expandedDay, setExpandedDay] = useState<string | null>(null);
 
   const showXpToast = (amount: number) => {
     setToastAmount(amount);
@@ -431,7 +432,7 @@ export default function HomeScreen() {
 
           {/* Step rows */}
           <View style={st.steps}>
-            {today.steps.slice(0, 4).map(step => {
+            {today.steps.map(step => {
               const done = !!todayChecks[step.id];
               return (
                 <Pressable
@@ -452,9 +453,6 @@ export default function HomeScreen() {
                 </Pressable>
               );
             })}
-            {today.steps.length > 4 && (
-              <Text style={st.moreSteps}>+ {today.steps.length - 4} more in your full routine</Text>
-            )}
           </View>
 
           {/* Progress bar at bottom */}
@@ -492,6 +490,28 @@ export default function HomeScreen() {
           </View>
         </Animated.View>
 
+        {/* ── Try-on entry ── */}
+        <Animated.View entering={FadeInUp.delay(360).duration(450)}>
+          <Pressable
+            onPress={() => router.push('/hairtransfer')}
+            style={st.tryOnCard}
+            accessibilityRole="button"
+            accessibilityLabel="Virtual hair try-on. Swap a reference hairstyle onto your photo."
+          >
+            <View style={st.tryOnTextCol}>
+              <Text style={st.tryOnLabel}>VIRTUAL TRY-ON</Text>
+              <Text style={st.tryOnTitle}>See a new style on you</Text>
+              <Text style={st.tryOnSub}>Upload a selfie and a reference look — we'll swap the hairstyle onto your photo.</Text>
+            </View>
+            <View style={st.tryOnIconWrap}>
+              <Svg width={28} height={28} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={1.8} strokeLinecap="round">
+                <Path d="M12 2L2 7l10 5 10-5-10-5z" />
+                <Path d="M2 17l10 5 10-5M2 12l10 5 10-5" />
+              </Svg>
+            </View>
+          </Pressable>
+        </Animated.View>
+
         {/* ── 5. YOUR FULL ROUTINE (collapsible) ── */}
         <Animated.View entering={FadeInUp.delay(320).duration(450)} style={st.routineCard}>
           <Pressable
@@ -517,11 +537,39 @@ export default function HomeScreen() {
                 const plan = weekPlan[d];
                 if (!plan) return null;
                 const isToday = d === todayLabel();
+                const isOpen = expandedDay === d;
                 return (
-                  <View key={d} style={[st.dayRow, isToday && st.dayRowToday]}>
-                    <Text style={[st.dayName, isToday && st.dayNameToday]}>{d}</Text>
-                    <Text style={[st.dayLabel, isToday && st.dayLabelToday]}>{plan.label}</Text>
-                    <Text style={st.dayStepCount}>{plan.steps.length} steps</Text>
+                  <View key={d}>
+                    <Pressable
+                      onPress={() => {
+                        Haptics.selectionAsync().catch(() => {});
+                        setExpandedDay(isOpen ? null : d);
+                      }}
+                      style={[st.dayRow, isToday && st.dayRowToday]}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${d}, ${plan.label}, ${plan.steps.length} steps. ${isOpen ? 'Hide' : 'Show'} steps.`}
+                    >
+                      <Text style={[st.dayName, isToday && st.dayNameToday]}>{d}</Text>
+                      <Text style={[st.dayLabel, isToday && st.dayLabelToday]}>{plan.label}</Text>
+                      <Text style={st.dayStepCount}>{plan.steps.length} steps</Text>
+                      <View style={[st.dayChev, isOpen && st.dayChevOpen]}>
+                        <IconChev color="#8A7FA0" />
+                      </View>
+                    </Pressable>
+                    {isOpen && (
+                      <View style={st.dayStepsList}>
+                        {plan.steps.map(s => (
+                          <View key={s.id} style={st.dayStepItem}>
+                            <View style={st.dayStepDot} />
+                            <View style={{ flex: 1 }}>
+                              <Text style={st.dayStepName}>{s.name}</Text>
+                              {!!s.desc && <Text style={st.dayStepDesc}>{s.desc}</Text>}
+                            </View>
+                            <Text style={st.dayStepXp}>+{s.xp ?? 10} XP</Text>
+                          </View>
+                        ))}
+                      </View>
+                    )}
                   </View>
                 );
               })}
@@ -666,17 +714,17 @@ const st = StyleSheet.create({
 
   // ── 2. Hero (today)
   heroCard: {
-    backgroundColor: Colors.white,
+    backgroundColor: 'rgba(124,77,200,0.10)',
     borderRadius: Radius.lg,
     padding: 22,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: 'rgba(124,77,200,0.22)',
     shadowColor: Colors.violet,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 12,
-    elevation: 1,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 3,
   },
   heroTitle: {
     fontFamily: 'Fraunces_700Bold',
@@ -775,6 +823,51 @@ const st = StyleSheet.create({
     lineHeight: 26,
     color: Colors.ink,
     letterSpacing: -0.2,
+  },
+
+  // ── Try-on hero card
+  tryOnCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.violet,
+    borderRadius: Radius.lg,
+    padding: 20,
+    marginBottom: 16,
+    gap: 16,
+    shadowColor: Colors.violet,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.22,
+    shadowRadius: 18,
+    elevation: 5,
+  },
+  tryOnTextCol: { flex: 1 },
+  tryOnLabel: {
+    fontFamily: 'Sora_600SemiBold',
+    fontSize: 11,
+    letterSpacing: 1.2,
+    color: 'rgba(255,255,255,0.7)',
+    marginBottom: 4,
+  },
+  tryOnTitle: {
+    fontFamily: 'Fraunces_700Bold',
+    fontSize: 20,
+    color: '#fff',
+    letterSpacing: -0.5,
+    marginBottom: 4,
+  },
+  tryOnSub: {
+    fontFamily: Fonts.body,
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.85)',
+    lineHeight: 17,
+  },
+  tryOnIconWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   // ── 4. Your rhythm
@@ -887,6 +980,46 @@ const st = StyleSheet.create({
     fontFamily: Fonts.body,
     fontSize: 11,
     color: Colors.muted,
+  },
+  dayChev: {
+    marginLeft: 8,
+    transform: [{ rotate: '90deg' }],
+  },
+  dayChevOpen: {
+    transform: [{ rotate: '-90deg' }],
+  },
+  dayStepsList: {
+    paddingLeft: 44,
+    paddingBottom: 10,
+    gap: 10,
+  },
+  dayStepItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  dayStepDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.lavender,
+    marginTop: 6,
+  },
+  dayStepName: {
+    fontFamily: 'Sora_500Medium',
+    fontSize: 13,
+    color: Colors.ink,
+  },
+  dayStepDesc: {
+    fontFamily: Fonts.body,
+    fontSize: 11,
+    color: Colors.muted,
+    marginTop: 1,
+  },
+  dayStepXp: {
+    fontFamily: 'Sora_500Medium',
+    fontSize: 11,
+    color: Colors.violet,
   },
 
   // ── 6. Pick of the day

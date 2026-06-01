@@ -41,7 +41,7 @@ serve(async (req) => {
   let event: Stripe.Event;
   try {
     const body = await req.text();
-    event = stripe.webhooks.constructEvent(body, signature, endpointSecret);
+    event = await stripe.webhooks.constructEventAsync(body, signature, endpointSecret);
   } catch (err) {
     console.error('Webhook signature verification failed:', err);
     return new Response(`Webhook Error: ${err.message}`, { status: 400 });
@@ -59,13 +59,27 @@ serve(async (req) => {
       case 'customer.subscription.updated': {
         const subscription = event.data.object as Stripe.Subscription;
         const customerId = subscription.customer as string;
-        const priceId = subscription.items.data[0]?.price.id;
+        const item = subscription.items?.data?.[0];
+        const priceId = item?.price.id;
         const tierInfo = PRICE_TO_TIER[priceId];
 
         if (!tierInfo) {
           console.warn(`Unknown price ID: ${priceId}`);
           break;
         }
+
+        // Only grant a paid tier once payment has actually gone through.
+        if (subscription.status !== 'active' && subscription.status !== 'trialing') {
+          console.log(`Subscription ${subscription.id} status is ${subscription.status}, not granting tier yet`);
+          break;
+        }
+
+        // Period dates: in newer Stripe API versions these live on the
+        // subscription item, not the subscription. Fall back safely.
+        const periodStartUnix = item?.current_period_start ?? (subscription as any).current_period_start;
+        const periodEndUnix = item?.current_period_end ?? (subscription as any).current_period_end;
+        const toISO = (unix: number | undefined) =>
+          typeof unix === 'number' ? new Date(unix * 1000).toISOString() : null;
 
         // Find user by Stripe customer ID
         const userId = await getUserIdByStripeCustomer(customerId);
@@ -83,8 +97,8 @@ serve(async (req) => {
             stripe_subscription_id: subscription.id,
             stripe_customer_id: customerId,
             is_annual: tierInfo.is_annual,
-            current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-            current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+            current_period_start: toISO(periodStartUnix),
+            current_period_end: toISO(periodEndUnix),
             cancel_at_period_end: subscription.cancel_at_period_end,
             // Reset usage on new period
             tryon_used_this_period: 0,

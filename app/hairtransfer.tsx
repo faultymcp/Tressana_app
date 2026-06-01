@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Pressable, Platform, Image,
-  ActivityIndicator, Alert,
+  ActivityIndicator, Alert, ActionSheetIOS,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
+import * as MediaLibrary from 'expo-media-library';
+import * as FileSystem from 'expo-file-system';
 import Svg, { Path, Circle } from 'react-native-svg';
 import { Colors, Fonts, Radius } from '@/constants/theme';
 import { supabase } from '@/lib/supabase';
@@ -28,45 +30,55 @@ export default function HairTransferScreen() {
   const [result, setResult] = useState<string | null>(null);
   const [stage, setStage] = useState<Stage>('upload');
   const [progress, setProgress] = useState('');
+  const [saving, setSaving] = useState(false);
 
-  const pickImage = async (type: 'selfie' | 'reference') => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission needed', 'We need access to your photos to use this feature.');
-      return;
-    }
+  const chooseImage = (type: 'selfie' | 'reference') => {
+    const doCamera = async () => {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission needed', 'We need camera access to take a photo.');
+        return;
+      }
+      const res = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        aspect: type === 'selfie' ? [3, 4] : [1, 1],
+        quality: 0.8,
+      });
+      if (!res.canceled && res.assets[0]) {
+        if (type === 'selfie') setSelfie(res.assets[0].uri);
+        else setReference(res.assets[0].uri);
+      }
+    };
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: type === 'selfie' ? [3, 4] : [1, 1],
-      quality: 0.8,
-      base64: true,
-    });
+    const doGallery = async () => {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission needed', 'We need access to your photos to use this feature.');
+        return;
+      }
+      const res = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: type === 'selfie' ? [3, 4] : [1, 1],
+        quality: 0.8,
+      });
+      if (!res.canceled && res.assets[0]) {
+        if (type === 'selfie') setSelfie(res.assets[0].uri);
+        else setReference(res.assets[0].uri);
+      }
+    };
 
-    if (!result.canceled && result.assets[0]) {
-      const uri = result.assets[0].uri;
-      if (type === 'selfie') setSelfie(uri);
-      else setReference(uri);
-    }
-  };
-
-  const takePhoto = async () => {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission needed', 'We need camera access for selfies.');
-      return;
-    }
-
-    const result = await ImagePicker.launchCameraAsync({
-      allowsEditing: true,
-      aspect: [3, 4],
-      quality: 0.8,
-      base64: true,
-    });
-
-    if (!result.canceled && result.assets[0]) {
-      setSelfie(result.assets[0].uri);
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        { options: ['Take Photo', 'Choose from Gallery', 'Cancel'], cancelButtonIndex: 2 },
+        (idx) => { if (idx === 0) doCamera(); else if (idx === 1) doGallery(); }
+      );
+    } else {
+      Alert.alert('Add photo', 'Choose a source', [
+        { text: 'Take Photo', onPress: doCamera },
+        { text: 'Choose from Gallery', onPress: doGallery },
+        { text: 'Cancel', style: 'cancel' },
+      ]);
     }
   };
 
@@ -123,6 +135,7 @@ export default function HairTransferScreen() {
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${session?.access_token}`,
+            'apikey': process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!,
           },
           body: JSON.stringify({
             selfie_base64: selfieBase64,
@@ -168,6 +181,27 @@ export default function HairTransferScreen() {
     setProgress('');
   };
 
+  const saveToGallery = async () => {
+    if (!result) return;
+    try {
+      const { status } = await MediaLibrary.requestPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission needed', 'Allow photo access to save your look.');
+        return;
+      }
+      setSaving(true);
+      // Download the remote result to a local file, then save to the library.
+      const fileUri = FileSystem.cacheDirectory + `tressana-look-${Date.now()}.png`;
+      const dl = await FileSystem.downloadAsync(result, fileUri);
+      await MediaLibrary.saveToLibraryAsync(dl.uri);
+      Alert.alert('Saved', 'Your new look has been saved to your photos.');
+    } catch (e: any) {
+      Alert.alert('Save failed', e?.message || 'Could not save the image. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <View style={st.container}>
       <View style={st.header}>
@@ -181,27 +215,23 @@ export default function HairTransferScreen() {
           <Animated.View entering={FadeInUp.duration(300)}>
             <Text style={st.heroTitle}>See yourself with a new style</Text>
             <Text style={st.heroSub}>Upload your selfie and a reference hairstyle. Our AI generates a 4K image of you with that look.</Text>
+            <Text style={st.privacyNote}>Your photos are used only to create your look and aren't saved to your Tressana account.</Text>
           </Animated.View>
 
           {/* Selfie upload */}
           <Animated.View entering={FadeInUp.delay(50).duration(300)}>
             <Text style={st.sectionLabel}>Your selfie</Text>
             {selfie ? (
-              <Pressable onPress={() => pickImage('selfie')} style={st.imagePreview}>
+              <Pressable onPress={() => chooseImage('selfie')} style={st.imagePreview}>
                 <Image source={{ uri: selfie }} style={st.previewImg} />
                 <View style={st.changeBtn}><Text style={st.changeBtnText}>Change</Text></View>
               </Pressable>
             ) : (
-              <View style={st.uploadRow}>
-                <Pressable onPress={takePhoto} style={st.uploadBtn}>
-                  <IC.Camera />
-                  <Text style={st.uploadLabel}>Take selfie</Text>
-                </Pressable>
-                <Pressable onPress={() => pickImage('selfie')} style={st.uploadBtn}>
-                  <IC.Image />
-                  <Text style={st.uploadLabel}>From gallery</Text>
-                </Pressable>
-              </View>
+              <Pressable onPress={() => chooseImage('selfie')} style={st.uploadBtnWide}>
+                <IC.Camera />
+                <Text style={st.uploadLabel}>Add your photo</Text>
+                <Text style={st.uploadSub}>Take a selfie or pick from your gallery</Text>
+              </Pressable>
             )}
           </Animated.View>
 
@@ -209,12 +239,12 @@ export default function HairTransferScreen() {
           <Animated.View entering={FadeInUp.delay(100).duration(300)}>
             <Text style={st.sectionLabel}>Reference hairstyle</Text>
             {reference ? (
-              <Pressable onPress={() => pickImage('reference')} style={st.imagePreview}>
+              <Pressable onPress={() => chooseImage('reference')} style={st.imagePreview}>
                 <Image source={{ uri: reference }} style={st.previewImg} />
                 <View style={st.changeBtn}><Text style={st.changeBtnText}>Change</Text></View>
               </Pressable>
             ) : (
-              <Pressable onPress={() => pickImage('reference')} style={st.uploadBtnWide}>
+              <Pressable onPress={() => chooseImage('reference')} style={st.uploadBtnWide}>
                 <IC.Image />
                 <Text style={st.uploadLabel}>Choose a hairstyle photo</Text>
                 <Text style={st.uploadSub}>From your gallery or screenshots</Text>
@@ -258,9 +288,9 @@ export default function HairTransferScreen() {
                 <IC.Refresh />
                 <Text style={st.actionBtnText}>Try another</Text>
               </Pressable>
-              <Pressable style={st.actionBtnPrimary}>
-                <IC.Download />
-                <Text style={st.actionBtnPrimaryText}>Save to gallery</Text>
+              <Pressable onPress={saveToGallery} disabled={saving} style={st.actionBtnPrimary}>
+                {saving ? <ActivityIndicator size="small" color="#fff" /> : <IC.Download />}
+                <Text style={st.actionBtnPrimaryText}>{saving ? 'Saving…' : 'Save to gallery'}</Text>
               </Pressable>
             </View>
 
@@ -299,6 +329,7 @@ const st = StyleSheet.create({
 
   heroTitle: { fontFamily: Fonts.heading, fontSize: 24, color: Colors.ink, marginBottom: 8, marginTop: 8, letterSpacing: -0.5 },
   heroSub: { fontFamily: Fonts.body, fontSize: 13, color: Colors.muted, lineHeight: 20, marginBottom: 28 },
+  privacyNote: { fontFamily: Fonts.body, fontSize: 11, color: Colors.muted, lineHeight: 16, marginTop: -20, marginBottom: 24, opacity: 0.8 },
 
   sectionLabel: {
     fontFamily: Fonts.bodySemi, fontSize: 12, color: Colors.muted,

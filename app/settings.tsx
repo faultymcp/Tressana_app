@@ -59,7 +59,7 @@ function NavRow({ icon, label, sublabel, right, onPress, last, destructive }: {
         <Text style={[st.rowLabel, destructive && { color: Colors.error }]}>{label}</Text>
         {sublabel && <Text style={st.rowSub}>{sublabel}</Text>}
       </View>
-      {right && <Text style={st.rowRight}>{right}</Text>}
+      {right && <Text style={st.rowRight} numberOfLines={1}>{right}</Text>}
       {!destructive && <IC.Chevron />}
     </Pressable>
   );
@@ -211,7 +211,7 @@ const st = StyleSheet.create({
   rowBody: { flex: 1 },
   rowLabel: { fontFamily: Fonts.bodyMedium, fontSize: 15, color: Colors.ink },
   rowSub: { fontFamily: Fonts.body, fontSize: 12, color: Colors.muted, marginTop: 1 },
-  rowRight: { fontFamily: Fonts.body, fontSize: 13, color: Colors.muted, marginRight: 4 },
+  rowRight: { fontFamily: Fonts.body, fontSize: 13, color: Colors.muted, marginRight: 4, flexShrink: 1, maxWidth: 180, textAlign: 'right' },
 
   footer: { fontFamily: Fonts.body, fontSize: 11, color: Colors.muted, textAlign: 'center', marginTop: 20, opacity: 0.4 },
 });

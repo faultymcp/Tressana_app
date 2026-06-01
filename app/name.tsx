@@ -42,7 +42,11 @@ export default function NameScreen() {
     } catch (e) {
       // Non-blocking: if storage fails, reveal will fall back to "You"
     }
-    router.replace('/reveal');
+    // Route to auth (email + OTP). After successful sign-in, auth.tsx
+    // will sync the quiz + bootstrap the routine, then send the user
+    // to the reveal — which becomes the celebration of a saved, persisted
+    // profile rather than an ephemeral one.
+    router.replace('/auth');
   }, [trimmed, canContinue, router]);
 
   return (

@@ -78,9 +78,14 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (!ready) return;
-    const inAuthGroup = segments[0] === 'auth';
-    if (session && inAuthGroup) {
-      router.replace('/(tabs)/profile');
+    // Returning-user shortcut: on cold app launch, if the user has a
+    // session AND they landed on the splash/onboarding/quiz entry
+    // points, send them straight to tabs. The auth screen handles its
+    // own post-verify routing (don't interfere).
+    const root = segments[0];
+    const isEntryPoint = !root || root === 'index' || root === 'onboarding';
+    if (session && isEntryPoint) {
+      router.replace('/(tabs)/home');
     }
   }, [session, segments, ready]);
 

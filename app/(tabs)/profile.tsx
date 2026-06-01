@@ -79,8 +79,21 @@ export default function ProfileScreen() {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         setEmail(user.email || '');
-        setName(user.user_metadata?.full_name || user.email?.split('@')[0] || 'User');
       }
+
+      // Match Home: prefer firstName from tressana_user, then metadata, then email local-part
+      let resolvedName = '';
+      try {
+        const userRaw = await AsyncStorage.getItem('tressana_user');
+        if (userRaw) {
+          const u = JSON.parse(userRaw);
+          if (u?.firstName) resolvedName = u.firstName;
+        }
+      } catch (e) {}
+      if (!resolvedName) {
+        resolvedName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User';
+      }
+      setName(resolvedName);
 
       const quizRaw = await AsyncStorage.getItem('tressana_quiz');
       if (quizRaw) {

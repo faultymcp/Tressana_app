@@ -14,6 +14,7 @@ import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors, Fonts, Spacing, Radius } from '@/constants/theme';
 import { supabase } from '@/lib/supabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type AuthStep = 'email' | 'otp';
 
@@ -58,7 +59,42 @@ export default function AuthScreen() {
         type: 'email',
       });
       if (error) throw error;
-      router.replace('/(tabs)/profile');
+
+      // Post-verify: sync quiz data + bootstrap the user's routine, then route.
+      // First-time users (no routine yet) see the reveal; returning users go home.
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        const userId = user?.id;
+
+        // Was this user already set up before this verify?
+        let isReturning = false;
+        if (userId) {
+          const { count } = await supabase
+            .from('user_routines')
+            .select('id', { count: 'exact', head: true })
+            .eq('user_id', userId);
+          isReturning = (count ?? 0) > 0;
+        }
+
+        // Sync quiz answers to Supabase (no-op if nothing cached).
+        const { syncQuizToSupabase } = require('@/lib/sync');
+        await syncQuizToSupabase();
+
+        // Bootstrap routine from quiz goals/segments if not already present.
+        if (userId && !isReturning) {
+          const raw = await AsyncStorage.getItem('tressana_user');
+          const quiz = raw ? JSON.parse(raw) : {};
+          const goals = quiz?.goals || [];
+          const segs = quiz?.segments || ['natural'];
+          const { bootstrapUserRoutine } = require('@/lib/routines');
+          await bootstrapUserRoutine(userId, goals, segs);
+        }
+
+        router.replace(isReturning ? '/(tabs)/home' : '/reveal');
+      } catch (routeErr) {
+        // If post-verify setup fails, still get the user into the app.
+        router.replace('/(tabs)/home');
+      }
     } catch (err: any) {
       setError(err.message || 'Invalid or expired code');
       setOtp(['', '', '', '', '', '']);

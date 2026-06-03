@@ -14,12 +14,10 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Colors, Fonts, Radius } from '@/constants/theme';
 import Animated, { FadeInUp, FadeInLeft, FadeInRight } from 'react-native-reanimated';
 
-// ── Groq API ─────────────────
 const GROQ_KEY = process.env.EXPO_PUBLIC_GROQ_KEY || '';
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const OPEN_FOOD_FACTS_URL = 'https://world.openfoodfacts.org/api/v0/product';
 
-// ── Tressie System Prompt ─────────────────────────────────────────
 const SYSTEM_PROMPT = `You are Tressie, the AI hair advisor exclusively inside the Tressana app. You ONLY talk about hair. Nothing else.
 
 YOUR PERSONALITY — older sister energy:
@@ -74,7 +72,6 @@ RULES:
 
 The Tressana app has: Wash Day Tracker, Stylist Marketplace, AI Hair Analysis.`;
 
-// ── Personalised chips by hair type ──────────────────────────────
 const CHIPS_BY_TYPE: Record<string, { label: string; emoji: string }[]> = {
   '1A': [{ label: 'My hair goes flat by noon', emoji: '😞' }, { label: 'Best volumising products', emoji: '✨' }, { label: 'How to add texture', emoji: '💁' }, { label: 'Avoid greasy roots', emoji: '🚫' }],
   '1B': [{ label: 'How to add volume', emoji: '💨' }, { label: 'Best lightweight products', emoji: '✨' }, { label: 'Keep style all day', emoji: '💪' }, { label: 'Reduce oiliness', emoji: '🌿' }],
@@ -95,11 +92,9 @@ function getSuggestions(hairType: string) {
   return CHIPS_BY_TYPE[hairType] || CHIPS_BY_TYPE.default;
 }
 
-// ── Types ─────────────────────────────────────────────────────────
 type Message = { id: string; role: 'user' | 'assistant'; text: string; attachment?: { type: 'image' | 'document'; name: string } };
 type GroqMessage = { role: 'user' | 'assistant' | 'system'; content: string };
 
-// ── Icons ─────────────────────────────────────────────────────────
 function IconSend() {
   return (
     <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
@@ -136,7 +131,6 @@ function IconDoc({ color = Colors.violet }: { color?: string }) {
   );
 }
 
-// ── Text renderers ────────────────────────────────────────────────
 function InlineText({ text, style, boldStyle }: { text: string; style?: any; boldStyle?: any }) {
   const parts = text.split(/\*\*(.*?)\*\*/g);
   return (
@@ -211,7 +205,6 @@ function MessageRow({ msg, index }: { msg: Message; index: number }) {
   );
 }
 
-// ── Barcode Scanner Modal ─────────────────────────────────────────
 function BarcodeScannerModal({ visible, onClose, onScanned }: { visible: boolean; onClose: () => void; onScanned: (barcode: string) => void }) {
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
@@ -255,7 +248,6 @@ function BarcodeScannerModal({ visible, onClose, onScanned }: { visible: boolean
   );
 }
 
-// ── Attach menu ───────────────────────────────────────────────────
 function AttachMenu({ onIngredientScan, onBarcodeScan, onDocument }: { onIngredientScan: () => void; onBarcodeScan: () => void; onDocument: () => void }) {
   return (
     <Animated.View entering={FadeInUp.duration(200)} style={st.attachMenu}>
@@ -279,11 +271,10 @@ function AttachMenu({ onIngredientScan, onBarcodeScan, onDocument }: { onIngredi
   );
 }
 
-// ── Main screen ───────────────────────────────────────────────────
 export default function AIChatScreen() {
   const [messages, setMessages] = useState<Message[]>([{
     id: 'welcome', role: 'assistant',
-    text: "Heyy! 👋 I'm **Tressie**, your hair assistant inside Tressana.\n\nReal talk — I've done the research, tried the products, and made the mistakes so you don't have to. I got you.\n\nSo what's going on with your hair? 👀",
+    text: "Heyy! 👋 I'm **Tressie**, your hair big sis inside Tressana.\n\nReal talk — I've done the research, tried the products, and made the mistakes so you don't have to. I got you.\n\nSo what's going on with your hair? 👀",
   }]);
   const [history, setHistory] = useState<GroqMessage[]>([]);
   const [input, setInput] = useState('');
@@ -305,7 +296,6 @@ export default function AIChatScreen() {
     setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
   }, []);
 
-  // ── Core send ───────────────────────────────────────────────────
   const sendMessage = useCallback(async (text?: string, attachment?: { type: 'image' | 'document'; name: string }) => {
     const trimmed = (text ?? input).trim();
     if (!trimmed || loading) return;
@@ -352,7 +342,6 @@ export default function AIChatScreen() {
     }
   }, [input, loading, history, hairType, scrollToBottom]);
 
-  // ── Ingredient scan ─────────────────────────────────────────────
   const handleIngredientScan = useCallback(async () => {
     Alert.alert(
       'Scan Ingredients',
@@ -363,17 +352,10 @@ export default function AIChatScreen() {
           onPress: async () => {
             const { status } = await ImagePicker.requestCameraPermissionsAsync();
             if (status !== 'granted') { Alert.alert('Permission needed', 'Please allow camera access.'); return; }
-            const result = await ImagePicker.launchCameraAsync({
-              mediaTypes: ['images'],
-              allowsEditing: true,
-              quality: 0.8,
-            });
+            const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], allowsEditing: true, quality: 0.8 });
             if (result.canceled) return;
             setShowAttachMenu(false);
-            sendMessage(
-              "I've taken a photo of a hair product ingredient list. Please analyse these ingredients for my hair type — tell me what's good, what to watch out for, and whether this product is suitable for me.",
-              { type: 'image', name: 'Ingredient Photo' }
-            );
+            sendMessage("I've taken a photo of a hair product ingredient list. Please analyse these ingredients for my hair type — tell me what's good, what to watch out for, and whether this product is suitable for me.", { type: 'image', name: 'Ingredient Photo' });
           },
         },
         {
@@ -384,10 +366,7 @@ export default function AIChatScreen() {
             const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 });
             if (result.canceled) return;
             setShowAttachMenu(false);
-            sendMessage(
-              "I've uploaded a photo of a hair product ingredient list. Please analyse these ingredients for my hair type — tell me what's good, what to watch out for, and whether this product is suitable for me.",
-              { type: 'image', name: 'Ingredient Label' }
-            );
+            sendMessage("I've uploaded a photo of a hair product ingredient list. Please analyse these ingredients for my hair type — tell me what's good, what to watch out for, and whether this product is suitable for me.", { type: 'image', name: 'Ingredient Label' });
           },
         },
         { text: 'Cancel', style: 'cancel' },
@@ -395,29 +374,19 @@ export default function AIChatScreen() {
     );
   }, [sendMessage]);
 
-  // ── Barcode scan ────────────────────────────────────────────────
   const handleBarcodeScanned = useCallback(async (barcode: string) => {
     setLoading(true);
     setShowSuggestions(false);
     try {
       const response = await fetch(`${OPEN_FOOD_FACTS_URL}/${barcode}.json`);
       const data = await response.json();
-      if (data.status === 0) {
-        sendMessage(`I scanned barcode ${barcode} but couldn't find the product. What should I look for in a good hair product?`);
-        return;
-      }
+      if (data.status === 0) { sendMessage(`I scanned barcode ${barcode} but couldn't find the product. What should I look for in a good hair product?`); return; }
       const p = data.product;
       const name = p.product_name || 'Unknown Product';
       const brand = p.brands || '';
       const ingredients = p.ingredients_text || p.ingredients_text_en || '';
-      if (!ingredients) {
-        sendMessage(`I scanned "${name}" by ${brand} but the ingredient list wasn't available. What should I look for in hair products?`);
-        return;
-      }
-      sendMessage(
-        `I just scanned **${name}** by ${brand}. Here are the ingredients:\n\n${ingredients}\n\nCan you analyse these for my hair type and tell me if this product is suitable?`,
-        { type: 'image', name: `Scanned: ${name}` }
-      );
+      if (!ingredients) { sendMessage(`I scanned "${name}" by ${brand} but the ingredient list wasn't available. What should I look for in hair products?`); return; }
+      sendMessage(`I just scanned **${name}** by ${brand}. Here are the ingredients:\n\n${ingredients}\n\nCan you analyse these for my hair type and tell me if this product is suitable?`, { type: 'image', name: `Scanned: ${name}` });
     } catch {
       sendMessage(`I scanned a product barcode. What ingredients should I look for in a good hair product for my hair type?`);
     } finally {
@@ -425,7 +394,6 @@ export default function AIChatScreen() {
     }
   }, [sendMessage]);
 
-  // ── Document upload ─────────────────────────────────────────────
   const handleDocumentUpload = useCallback(async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({ type: ['text/plain', 'application/pdf'], copyToCacheDirectory: true });
@@ -436,10 +404,7 @@ export default function AIChatScreen() {
       const text = await res.text();
       const truncated = text.slice(0, 3000);
       setShowAttachMenu(false);
-      sendMessage(
-        `I've uploaded a document called "${file.name}". Here's the content:\n\n${truncated}\n\nCan you give me hair care advice based on this?`,
-        { type: 'document', name: file.name }
-      );
+      sendMessage(`I've uploaded a document called "${file.name}". Here's the content:\n\n${truncated}\n\nCan you give me hair care advice based on this?`, { type: 'document', name: file.name });
     } catch { Alert.alert('Error', 'Could not read the file. Please try a .txt file.'); }
   }, [sendMessage]);
 
@@ -455,7 +420,6 @@ export default function AIChatScreen() {
   return (
     <SafeAreaView style={st.safe}>
       <StatusBar barStyle="light-content" />
-
       <LinearGradient colors={['#120B2E', '#332463', Colors.violet]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={st.header}>
         <View style={st.headerAvatar}><Text style={{ fontSize: 22 }}>✨</Text></View>
         <View style={st.headerText}>
@@ -467,14 +431,10 @@ export default function AIChatScreen() {
         </View>
       </LinearGradient>
 
-      <BarcodeScannerModal
-        visible={showBarcodeScanner}
-        onClose={() => setShowBarcodeScanner(false)}
-        onScanned={handleBarcodeScanned}
-      />
+      <BarcodeScannerModal visible={showBarcodeScanner} onClose={() => setShowBarcodeScanner(false)} onScanned={handleBarcodeScanned} />
 
-      <KeyboardAvoidingView style={st.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <Pressable style={st.flex} onPress={() => setShowAttachMenu(false)}>
+      <KeyboardAvoidingView style={st.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'padding'} keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}>
+        <Pressable style={st.flex} onPress={() => setShowAttachMenu(false)} pointerEvents="box-none">
           <FlatList
             ref={listRef}
             data={listData}
@@ -487,6 +447,7 @@ export default function AIChatScreen() {
             alwaysBounceVertical={true}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="on-drag"
+            maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
             onContentSizeChange={scrollToBottom}
             renderItem={({ item, index }) => {
               if (item.role === 'typing') return <TypingDots />;
@@ -559,11 +520,9 @@ export default function AIChatScreen() {
   );
 }
 
-// ── Styles ────────────────────────────────────────────────────────
 const st = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.porcelain },
   flex: { flex: 1 },
-
   header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 0 : 8, paddingBottom: 16 },
   headerAvatar: { width: 46, height: 46, borderRadius: 23, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.25)' },
   headerText: { flex: 1 },
@@ -571,52 +530,38 @@ const st = StyleSheet.create({
   headerSubRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 },
   onlineDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.lime },
   headerSub: { fontFamily: Fonts.body, fontSize: 12, color: 'rgba(255,255,255,0.7)' },
-
   list: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8, gap: 10 },
   msgRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
   msgRowAI: { flexDirection: 'row' },
   msgRowUser: { flexDirection: 'row-reverse' },
   aiAvatar: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   userAvatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: Colors.violetBg2, alignItems: 'center', justifyContent: 'center', flexShrink: 0, borderWidth: 1.5, borderColor: Colors.border },
-
   bubble: { paddingVertical: 10, paddingHorizontal: 14, borderRadius: 18 },
   bubbleAI: { backgroundColor: Colors.white, borderTopLeftRadius: 4, borderWidth: 1.5, borderColor: Colors.border },
   bubbleUser: { borderTopRightRadius: 4 },
   bubbleText: { fontFamily: Fonts.body, fontSize: 14, color: Colors.ink, lineHeight: 21 },
   bubbleTextUser: { color: Colors.white },
-
   attachBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: Colors.violetBg2, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, marginBottom: 4, borderWidth: 1, borderColor: Colors.border },
   attachBadgeUser: { backgroundColor: 'rgba(255,255,255,0.15)' },
   attachBadgeName: { fontFamily: Fonts.bodyMedium, fontSize: 12, color: Colors.violet, flex: 1 },
-
   bulletRow: { flexDirection: 'row', gap: 6, marginBottom: 2 },
   bullet: { fontFamily: Fonts.bodySemi, color: Colors.violet, fontSize: 14, lineHeight: 21 },
   typingRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
   dotsWrap: { flexDirection: 'row', gap: 5, alignItems: 'center', paddingVertical: 4 },
   dot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: Colors.violet },
-
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingLeft: 40, paddingTop: 2 },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1.5, borderColor: Colors.violet, borderRadius: 20, paddingVertical: 7, paddingHorizontal: 12, backgroundColor: Colors.white },
   chipEmoji: { fontSize: 12 },
   chipText: { fontFamily: Fonts.bodyMedium, fontSize: 12, color: Colors.violet },
-
   errorBox: { backgroundColor: 'rgba(239,68,68,0.06)', borderWidth: 1, borderColor: 'rgba(239,68,68,0.12)', borderRadius: Radius.md, padding: 12 },
   errorText: { fontFamily: Fonts.body, fontSize: 13, color: Colors.error },
-
   attachMenu: { marginHorizontal: 16, marginBottom: 8, backgroundColor: Colors.white, borderRadius: 18, borderWidth: 1.5, borderColor: Colors.border, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 4 },
   attachItem: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16 },
   attachIconWrap: { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.violetBg2, alignItems: 'center', justifyContent: 'center' },
   attachLabel: { fontFamily: Fonts.bodySemi, fontSize: 14, color: Colors.ink },
   attachSub: { fontFamily: Fonts.body, fontSize: 12, color: Colors.muted, marginTop: 1 },
   attachDivider: { height: 1, backgroundColor: Colors.border, marginLeft: 70 },
-
-  inputWrap: {
-    paddingHorizontal: 16, paddingTop: 10,
-    paddingBottom: Platform.OS === 'ios' ? 24 : 14,
-    borderTopWidth: 1, borderTopColor: Colors.border,
-    backgroundColor: Colors.porcelain,
-    position: 'relative',
-  },
+  inputWrap: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: Platform.OS === 'ios' ? 24 : 14, borderTopWidth: 1, borderTopColor: Colors.border, backgroundColor: Colors.porcelain, position: 'relative' },
   inputRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, backgroundColor: Colors.white, borderWidth: 1.5, borderColor: Colors.border, borderRadius: Radius.lg, paddingLeft: 6, paddingRight: 6, paddingVertical: 6 },
   inputRowFocused: { borderColor: Colors.violet },
   plusBtn: { flexShrink: 0 },
@@ -625,7 +570,6 @@ const st = StyleSheet.create({
   input: { flex: 1, fontFamily: Fonts.body, fontSize: 14, color: Colors.ink, maxHeight: 100, paddingVertical: 6, paddingHorizontal: 8 },
   sendBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   footerNote: { fontFamily: Fonts.body, fontSize: 10, color: Colors.muted, textAlign: 'center', marginTop: 8, opacity: 0.55 },
-
   scanModal: { flex: 1, backgroundColor: '#000' },
   scanHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 54 : 40, paddingBottom: 16, backgroundColor: '#120B2E' },
   scanTitle: { fontFamily: Fonts.heading, fontSize: 18, color: '#fff' },

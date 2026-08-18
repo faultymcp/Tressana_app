@@ -14,7 +14,7 @@ export async function syncQuizToSupabase(): Promise<boolean> {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return false;
 
-    const raw = await AsyncStorage.getItem('tressana_quiz');
+    const raw = await AsyncStorage.getItem('tressie_quiz');
     if (!raw) return false;
 
     const quiz = JSON.parse(raw);
@@ -57,7 +57,7 @@ export async function restoreQuizFromSupabase(): Promise<boolean> {
     if (!user) return false;
 
     // Check if local data already exists
-    const local = await AsyncStorage.getItem('tressana_quiz');
+    const local = await AsyncStorage.getItem('tressie_quiz');
     if (local) return false; // Already have local data, skip
 
     const { data, error } = await supabase
@@ -79,7 +79,7 @@ export async function restoreQuizFromSupabase(): Promise<boolean> {
       segments: data.segments || ['natural'],
     };
 
-    await AsyncStorage.setItem('tressana_quiz', JSON.stringify(quizResults));
+    await AsyncStorage.setItem('tressie_quiz', JSON.stringify(quizResults));
     return true;
   } catch (e) {
     console.log('Quiz restore failed:', e);

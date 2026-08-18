@@ -1,5 +1,5 @@
 /**
- * Tressana Hair Transfer Pipeline - Simplified Version
+ * Tressie Hair Transfer Pipeline - Simplified Version
  *
  * Direct transfer using Nano Banana Pro (selfie + reference image)
  * No separate description step needed

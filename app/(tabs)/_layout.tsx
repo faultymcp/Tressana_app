@@ -1,6 +1,6 @@
 // app/(tabs)/_layout.tsx
 //
-// The tab bar. Editorial chrome that wraps every tab in Tressana.
+// The tab bar. Editorial chrome that wraps every tab in Tressie.
 //
 // Design rules:
 //   - Slimmer silhouette than default RN tabs (76pt on iOS vs 88pt)

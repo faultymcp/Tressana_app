@@ -80,7 +80,7 @@ export async function startSubscription(
       price_id: priceId,
     });
 
-    const result = await WebBrowser.openAuthSessionAsync(url, 'tressana://payment-success');
+    const result = await WebBrowser.openAuthSessionAsync(url, 'tressie://payment-success');
 
     if (result.type === 'success') {
       // The webhook will update the DB. 
@@ -109,7 +109,7 @@ export async function startWalletTopUp(
       amount_pence: amountPence,
     });
 
-    const result = await WebBrowser.openAuthSessionAsync(url, 'tressana://payment-success');
+    const result = await WebBrowser.openAuthSessionAsync(url, 'tressie://payment-success');
 
     if (result.type === 'success') {
       setTimeout(() => onSuccess?.(), 1500);
@@ -293,7 +293,7 @@ export async function startBookingPayment(
       },
     });
 
-    const result = await WebBrowser.openAuthSessionAsync(url, 'tressana://payment-success');
+    const result = await WebBrowser.openAuthSessionAsync(url, 'tressie://payment-success');
 
     if (result.type === 'success') {
       setTimeout(() => onSuccess?.(), 1500);

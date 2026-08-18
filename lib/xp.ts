@@ -61,13 +61,13 @@ export async function handleDailyLogin(): Promise<number> {
   try {
     const AsyncStorage = require('@react-native-async-storage/async-storage').default;
     const today = new Date().toISOString().split('T')[0];
-    const lastLogin = await AsyncStorage.getItem('tressana_last_login_xp');
+    const lastLogin = await AsyncStorage.getItem('tressie_last_login_xp');
 
     if (lastLogin === today) return 0; // Already awarded today
 
     const xp = await awardXp('daily_login', undefined, 'Daily app open');
     await updateStreak();
-    await AsyncStorage.setItem('tressana_last_login_xp', today);
+    await AsyncStorage.setItem('tressie_last_login_xp', today);
     return xp;
   } catch (e) {
     console.log('Daily login XP failed:', e);

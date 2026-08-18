@@ -460,8 +460,8 @@ export default function RevealScreen() {
   useEffect(() => {
     (async () => {
       const [userRaw, quizRaw] = await Promise.all([
-        AsyncStorage.getItem('tressana_user'),
-        AsyncStorage.getItem('tressana_quiz'),
+        AsyncStorage.getItem('tressie_user'),
+        AsyncStorage.getItem('tressie_quiz'),
       ]);
       const userObj = userRaw ? JSON.parse(userRaw) : null;
       const quizObj = quizRaw ? JSON.parse(quizRaw) : null;

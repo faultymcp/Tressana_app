@@ -15,13 +15,6 @@ import {
   Inter_600SemiBold,
   Inter_700Bold,
 } from '@expo-google-fonts/inter';
-import {
-  Fraunces_400Regular,
-  Fraunces_500Medium,
-  Fraunces_600SemiBold,
-  Fraunces_700Bold,
-  Fraunces_400Regular_Italic,
-} from '@expo-google-fonts/fraunces';
 import { Colors } from '@/constants/theme';
 import { supabase } from '@/lib/supabase';
 import { fullSync } from '@/lib/sync';
@@ -44,11 +37,6 @@ export default function RootLayout() {
     Inter_500Medium,
     Inter_600SemiBold,
     Inter_700Bold,
-    Fraunces_400Regular,
-    Fraunces_500Medium,
-    Fraunces_600SemiBold,
-    Fraunces_700Bold,
-    Fraunces_400Regular_Italic,
   });
 
   useEffect(() => {
@@ -78,14 +66,9 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (!ready) return;
-    // Returning-user shortcut: on cold app launch, if the user has a
-    // session AND they landed on the splash/onboarding/quiz entry
-    // points, send them straight to tabs. The auth screen handles its
-    // own post-verify routing (don't interfere).
-    const root = segments[0];
-    const isEntryPoint = !root || root === 'index' || root === 'onboarding';
-    if (session && isEntryPoint) {
-      router.replace('/(tabs)/home');
+    const inAuthGroup = segments[0] === 'auth';
+    if (session && inAuthGroup) {
+      router.replace('/(tabs)/profile');
     }
   }, [session, segments, ready]);
 
@@ -105,7 +88,7 @@ export default function RootLayout() {
         <Stack.Screen name="onboarding" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="auth" options={{ animation: 'slide_from_bottom', presentation: 'modal' }} />
         <Stack.Screen name="quiz" options={{ animation: 'slide_from_right', gestureEnabled: false }} />
-        <Stack.Screen name="name" options={{ animation: 'slide_from_right', gestureEnabled: false }} />
+        <Stack.Screen name="business" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="reveal" options={{ animation: 'fade' }} />
         <Stack.Screen name="(tabs)" options={{ animation: 'fade' }} />
 

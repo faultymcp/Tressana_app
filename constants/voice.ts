@@ -1,5 +1,5 @@
 // constants/voice.ts
-// The Tressana voice. Single source of truth for who is speaking to the
+// The Tressie voice. Single source of truth for who is speaking to the
 // user. Every piece of copy across the app passes through this filter
 // before it ships. If it doesn't sound like the person below, rewrite.
 //
@@ -13,7 +13,7 @@ export const Voice = {
   /**
    * WHO IS SPEAKING
    *
-   * Tressana is voiced by a woman in her thirties who has worked in
+   * Tressie is voiced by a woman in her thirties who has worked in
    * salons across many hair types and read trichology. Her own hair is
    * not the point — what matters is that she has held space for the full
    * range: the woman with sleek straight hair who can't figure out why
@@ -136,7 +136,7 @@ export const Voice = {
    * specifics. The voice does not change. The facts do.
    */
   examples: {
-    welcomeOpening: "We built Tressana for the moment your hair stops making sense — when what worked stopped working, when nothing you've been told fits, when you want to understand your hair instead of fighting it.",
+    welcomeOpening: "We built Tressie for the moment your hair stops making sense — when what worked stopped working, when nothing you've been told fits, when you want to understand your hair instead of fighting it.",
     questionPrompt: "How does water act on your hair?",
     questionSubtitle: "Think about wash day. Does it sit on top, or does your hair drink it in?",
     proTip: "Don't stretch it. Let it tell you what it wants to do.",
@@ -155,7 +155,7 @@ export const Voice = {
    * COPY REVIEW CHECKLIST
    *
    * Before any new copy ships, run it past these:
-   *   1. Could this be from any wellness app, or only Tressana?
+   *   1. Could this be from any wellness app, or only Tressie?
    *   2. Does it sound like the woman described above?
    *   3. Is it doing teaching, holding, welcoming, recognition, or
    *      questioning? Does the register match?

@@ -84,7 +84,7 @@ export const useUserStore = create<UserState>((set, get) => ({
       // Quiz data from AsyncStorage
       let hairType = '', porosity = '', goals: string[] = [], segments: string[] = ['natural'];
       try {
-        const raw = await AsyncStorage.getItem('tressana_quiz');
+        const raw = await AsyncStorage.getItem('tressie_quiz');
         if (raw) {
           const q = JSON.parse(raw);
           hairType = q.hairType || '';

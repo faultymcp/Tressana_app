@@ -191,7 +191,7 @@ export default function HairTransferScreen() {
       }
       setSaving(true);
       // Download the remote result to a local file, then save to the library.
-      const fileUri = FileSystem.cacheDirectory + `tressana-look-${Date.now()}.png`;
+      const fileUri = FileSystem.cacheDirectory + `tressie-look-${Date.now()}.png`;
       const dl = await FileSystem.downloadAsync(result, fileUri);
       await MediaLibrary.saveToLibraryAsync(dl.uri);
       Alert.alert('Saved', 'Your new look has been saved to your photos.');
@@ -215,7 +215,7 @@ export default function HairTransferScreen() {
           <Animated.View entering={FadeInUp.duration(300)}>
             <Text style={st.heroTitle}>See yourself with a new style</Text>
             <Text style={st.heroSub}>Upload your selfie and a reference hairstyle. Our AI generates a 4K image of you with that look.</Text>
-            <Text style={st.privacyNote}>Your photos are used only to create your look and aren't saved to your Tressana account.</Text>
+            <Text style={st.privacyNote}>Your photos are used only to create your look and aren't saved to your Tressie account.</Text>
           </Animated.View>
 
           {/* Selfie upload */}

@@ -286,9 +286,9 @@ function dateNDaysAgoISO(n: number): string {
 
 // ── Cache keys ──────────────────────────────────────────────────────
 // Per-user cache so multiple test accounts on one device don't collide.
-const CACHE_WEEK = (userId: string) => `tressana_user_routine_v1:${userId}`;
-const CACHE_COMPLETIONS_TODAY = (userId: string) => `tressana_completions_today_v1:${userId}`;
-const CACHE_COMPLETIONS_WEEK = (userId: string) => `tressana_completions_week_v1:${userId}`;
+const CACHE_WEEK = (userId: string) => `tressie_user_routine_v1:${userId}`;
+const CACHE_COMPLETIONS_TODAY = (userId: string) => `tressie_completions_today_v1:${userId}`;
+const CACHE_COMPLETIONS_WEEK = (userId: string) => `tressie_completions_week_v1:${userId}`;
 
 // ── Types for the user layer ────────────────────────────────────────
 export type UserRoutineStep = RoutineStep & {

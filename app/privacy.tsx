@@ -58,7 +58,7 @@ export default function PrivacyScreen() {
         <View style={st.infoCard}>
           <View style={st.infoIcon}><IC.Shield /></View>
           <Text style={st.infoTitle}>Your data, your control</Text>
-          <Text style={st.infoDesc}>Tressana stores your data securely on EU-hosted servers. We never sell your personal information to third parties. You can export or delete your data at any time.</Text>
+          <Text style={st.infoDesc}>Tressie stores your data securely on EU-hosted servers. We never sell your personal information to third parties. You can export or delete your data at any time.</Text>
         </View>
 
         {/* What we collect */}

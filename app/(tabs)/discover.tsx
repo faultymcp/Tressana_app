@@ -63,7 +63,7 @@ export default function DiscoverScreen() {
   const styles_list = STYLE_SUGGESTIONS[typeGroup] || STYLE_SUGGESTIONS['3'];
 
   useEffect(() => {
-    AsyncStorage.getItem('tressana_quiz').then(raw => {
+    AsyncStorage.getItem('tressie_quiz').then(raw => {
       if (raw) {
         const data = JSON.parse(raw);
         setHairType(data.hairType || '3A');

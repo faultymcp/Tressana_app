@@ -81,10 +81,10 @@ export default function ProfileScreen() {
         setEmail(user.email || '');
       }
 
-      // Match Home: prefer firstName from tressana_user, then metadata, then email local-part
+      // Match Home: prefer firstName from tressie_user, then metadata, then email local-part
       let resolvedName = '';
       try {
-        const userRaw = await AsyncStorage.getItem('tressana_user');
+        const userRaw = await AsyncStorage.getItem('tressie_user');
         if (userRaw) {
           const u = JSON.parse(userRaw);
           if (u?.firstName) resolvedName = u.firstName;
@@ -95,7 +95,7 @@ export default function ProfileScreen() {
       }
       setName(resolvedName);
 
-      const quizRaw = await AsyncStorage.getItem('tressana_quiz');
+      const quizRaw = await AsyncStorage.getItem('tressie_quiz');
       if (quizRaw) {
         const q = JSON.parse(quizRaw);
         setHairType(q.hairType || '');
@@ -223,7 +223,7 @@ export default function ProfileScreen() {
           <MenuRow icon={<IC.LogOut />} label="Sign out" onPress={handleSignOut} destructive last />
         </View>
         <Text style={st.emailLabel}>{email}</Text>
-        <Text style={st.version}>Tressana v1.0.0</Text>
+        <Text style={st.version}>Tressie v1.0.0</Text>
       </Animated.View>
     </ScrollView>
   );

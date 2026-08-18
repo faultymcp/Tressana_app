@@ -86,7 +86,7 @@ export default function SettingsScreen() {
       if (data.user) setEmail(data.user.email || '');
     });
     // Load prefs
-    AsyncStorage.getItem('tressana_notif_prefs').then(raw => {
+    AsyncStorage.getItem('tressie_notif_prefs').then(raw => {
       if (raw) {
         const p = JSON.parse(raw);
         setPushRoutine(p.routine ?? true);
@@ -99,7 +99,7 @@ export default function SettingsScreen() {
 
   const saveNotifPref = (key: string, value: boolean) => {
     const prefs = { routine: pushRoutine, tips: pushTips, promo: pushPromo, booking: pushBooking, [key]: value };
-    AsyncStorage.setItem('tressana_notif_prefs', JSON.stringify(prefs));
+    AsyncStorage.setItem('tressie_notif_prefs', JSON.stringify(prefs));
   };
 
   const handleDeleteAccount = () => {
@@ -174,7 +174,7 @@ export default function SettingsScreen() {
           <NavRow icon={<IC.Trash />} label="Delete account" destructive onPress={handleDeleteAccount} last />
         </View>
 
-        <Text style={st.footer}>Tressana v1.0.0</Text>
+        <Text style={st.footer}>Tressie v1.0.0</Text>
       </ScrollView>
     </View>
   );

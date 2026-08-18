@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, Pressable, Image, Dimensions, Platform,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
@@ -103,7 +102,6 @@ function CTAButton({ label, onPress }: { label: string; onPress: () => void }) {
 // ─── Screen ─────────────────────────────────────────────────────
 export default function OnboardingScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const [step, setStep] = useState(0);
   const isLast = step === STEPS.length - 1;
   const current = STEPS[step];
@@ -160,7 +158,7 @@ export default function OnboardingScreen() {
       </View>
 
       {/* Top: progress + skip */}
-      <View style={[s.topBar, { paddingTop: insets.top + 12 }]}>
+      <View style={s.topBar}>
         <View style={s.progressWrap}>
           <ProgressBar step={step} total={STEPS.length} />
         </View>
@@ -178,6 +176,9 @@ export default function OnboardingScreen() {
       {/* Footer */}
       <View style={s.footer}>
         <CTAButton label={isLast ? 'Start the quiz' : 'Continue'} onPress={next} />
+        <Pressable onPress={() => router.push('/business')} style={s.bizLink}>
+          <Text style={s.bizText}>I'm a salon or stylist</Text>
+        </Pressable>
       </View>
     </View>
   );
@@ -201,31 +202,24 @@ const s = StyleSheet.create({
   topBar: {
     flexDirection: 'row', alignItems: 'center', gap: 16,
     paddingHorizontal: 24,
+    paddingTop: Platform.OS === 'ios' ? 56 : 42,
   },
   progressWrap: { flex: 1 },
   progressRow: { flexDirection: 'row', gap: 6 },
   progressSegment: {
     flex: 1, height: 3, borderRadius: 1.5,
-    backgroundColor: 'rgba(255,255,255,0.4)',
+    backgroundColor: 'rgba(118,67,172,0.18)',
     overflow: 'hidden',
   },
   progressFill: {
     width: '100%', height: '100%',
-    backgroundColor: Colors.white,
+    backgroundColor: Colors.violet,
     transformOrigin: 'left' as any,
   },
-  skipBtn: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 999,
-    backgroundColor: 'rgba(0,0,0,0.28)',
-  },
-  skipText: {
-    fontFamily: Fonts.bodyMedium,
-    fontSize: 12,
-    color: Colors.white,
-    letterSpacing: 0.4,
-  },
+  skipBtn: { paddingVertical: 4 },
+  skipText: { fontFamily: Fonts.bodyMedium, fontSize: 13, color: Colors.ink, opacity: 0.55 },
+  bizLink: { paddingTop: 14, paddingBottom: 2, alignItems: 'center' },
+  bizText: { fontFamily: Fonts.bodyMedium, fontSize: 13, color: Colors.violet },
 
   // Content
   content: {

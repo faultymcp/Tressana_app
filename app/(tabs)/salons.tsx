@@ -56,7 +56,7 @@ export default function SalonsScreen() {
   const typeGroup = hairType.charAt(0) || '';
 
   useEffect(() => {
-    AsyncStorage.getItem('tressana_quiz').then(raw => {
+    AsyncStorage.getItem('tressie_quiz').then(raw => {
       if (raw) setHairType(JSON.parse(raw).hairType || '');
     });
     fetchSalons();

@@ -73,8 +73,8 @@ serve(async (req) => {
         mode: 'subscription',
         line_items: [{ price: price_id, quantity: 1 }],
         allow_promotion_codes: true,  // User can enter XP-generated promo codes
-        success_url: 'tressana://payment-success?type=subscription',
-        cancel_url: 'tressana://payment-cancel',
+        success_url: 'tressie://payment-success?type=subscription',
+        cancel_url: 'tressie://payment-cancel',
         subscription_data: {
           metadata: { supabase_user_id: user.id },
         },
@@ -97,15 +97,15 @@ serve(async (req) => {
             currency: 'gbp',
             product_data: {
               name: booking_description || 'Salon Appointment',
-              description: 'Booked via Tressana',
+              description: 'Booked via Tressie',
             },
             unit_amount: booking_amount_pence,
           },
           quantity: 1,
         }],
         allow_promotion_codes: true,  // User can enter XP-generated promo codes
-        success_url: 'tressana://payment-success?type=booking',
-        cancel_url: 'tressana://payment-cancel',
+        success_url: 'tressie://payment-success?type=booking',
+        cancel_url: 'tressie://payment-cancel',
         metadata: {
           type: 'booking',
           user_id: user.id,
@@ -134,15 +134,15 @@ serve(async (req) => {
           price_data: {
             currency: 'gbp',
             product_data: {
-              name: `Tressana Wallet Top-Up`,
-              description: `Add £${(amount_pence / 100).toFixed(2)} to your Tressana wallet`,
+              name: `Tressie Wallet Top-Up`,
+              description: `Add £${(amount_pence / 100).toFixed(2)} to your Tressie wallet`,
             },
             unit_amount: amount_pence,
           },
           quantity: 1,
         }],
-        success_url: 'tressana://payment-success?type=wallet',
-        cancel_url: 'tressana://payment-cancel',
+        success_url: 'tressie://payment-success?type=wallet',
+        cancel_url: 'tressie://payment-cancel',
         metadata: {
           type: 'wallet_topup',
           user_id: user.id,

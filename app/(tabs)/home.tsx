@@ -1,6 +1,6 @@
 // app/(tabs)/home.tsx
 //
-// Tressana home — the daily editorial surface.
+// Tressie home — the daily editorial surface.
 //
 // Design lineage:
 //   - Flo's ritual (the user returns daily for a relationship with her hair)
@@ -220,12 +220,12 @@ export default function HomeScreen() {
   useEffect(() => {
     (async () => {
       // User name
-      const userRaw = await AsyncStorage.getItem('tressana_user');
+      const userRaw = await AsyncStorage.getItem('tressie_user');
       const userObj = userRaw ? JSON.parse(userRaw) : null;
       setFirstName(userObj?.firstName?.trim() || '');
 
       // Quiz data
-      const quizRaw = await AsyncStorage.getItem('tressana_quiz');
+      const quizRaw = await AsyncStorage.getItem('tressie_quiz');
       const data = quizRaw ? JSON.parse(quizRaw) : null;
       const ht = data?.hairType || '3A';
       const goals = data?.goals || [];
@@ -242,7 +242,7 @@ export default function HomeScreen() {
       let dbPlan: Record<string, DayPlan> | null = null;
 
       // Read local checks first so server seed (below) is authoritative.
-      const checksRaw = await AsyncStorage.getItem('tressana_checks');
+      const checksRaw = await AsyncStorage.getItem('tressie_checks');
       if (checksRaw) {
         try { setChecks(JSON.parse(checksRaw)); } catch {}
       }
@@ -272,7 +272,7 @@ export default function HomeScreen() {
       setWeekPlan(dbPlan || buildWeekFallback());
 
       // Days since wash (rough estimate from check history)
-      const lastWashRaw = await AsyncStorage.getItem('tressana_last_wash');
+      const lastWashRaw = await AsyncStorage.getItem('tressie_last_wash');
       if (lastWashRaw) {
         const last = new Date(lastWashRaw);
         const diff = Math.floor((Date.now() - last.getTime()) / (1000 * 60 * 60 * 24));
@@ -281,7 +281,7 @@ export default function HomeScreen() {
 
       // Daily login XP
       const today = new Date().toISOString().split('T')[0];
-      const lastLogin = await AsyncStorage.getItem('tressana_last_login_xp');
+      const lastLogin = await AsyncStorage.getItem('tressie_last_login_xp');
       if (lastLogin !== today) {
         const xp = await doAwardXp('daily_login', undefined, 'Daily app open');
         if (xp > 0) { setXpToday(prev => prev + xp); showXpToast(xp); }
@@ -289,7 +289,7 @@ export default function HomeScreen() {
           const { data: { user } } = await supabase.auth.getUser();
           if (user) await supabase.rpc('update_streak', { p_user_id: user.id });
         } catch {}
-        await AsyncStorage.setItem('tressana_last_login_xp', today);
+        await AsyncStorage.setItem('tressie_last_login_xp', today);
       }
 
       // Streak
@@ -330,11 +330,11 @@ export default function HomeScreen() {
     dayChecks[stepId] = !wasDone;
     const updated = { ...checks, [day]: dayChecks };
     setChecks(updated);
-    await AsyncStorage.setItem('tressana_checks', JSON.stringify(updated)).catch(() => {});
+    await AsyncStorage.setItem('tressie_checks', JSON.stringify(updated)).catch(() => {});
 
     // If wash step completed, record wash date
     if (!wasDone && (stepName.toLowerCase().includes('cleanse') || stepName.toLowerCase().includes('wash') || stepName.toLowerCase().includes('shampoo'))) {
-      await AsyncStorage.setItem('tressana_last_wash', new Date().toISOString());
+      await AsyncStorage.setItem('tressie_last_wash', new Date().toISOString());
       setDaysSinceWash(0);
     }
 
@@ -631,7 +631,7 @@ export default function HomeScreen() {
         {/* ── 8. CLOSING NOTE ── */}
         <Animated.View entering={FadeInUp.delay(560).duration(450)} style={st.closer}>
           <Text style={st.closerText}>
-            Tressana adjusts as you do — tap any step to make it yours.
+            Tressie adjusts as you do — tap any step to make it yours.
           </Text>
         </Animated.View>
       </ScrollView>

@@ -11,12 +11,11 @@ import { Colors, Fonts, Radius } from '@/constants/theme';
 import QuizSegmentStep, { SEGMENTS } from '@/components/QuizSegmentStep';
 import JourneyMap, { Phase } from '@/components/JourneyMap';
 import {
-  PatternLineup,
   CuticleStrands,
 } from '@/components/InterstitialVisuals';
 
 // ════════════════════════════════════════════════════════════════
-// Voice: Tressana speaks like a Black woman in her thirties who has
+// Voice: Tressie speaks like a Black woman in her thirties who has
 // worked in salons, lived through a postpartum shed and a transitioning
 // year, and would never ask a question she wouldn't want asked of her.
 // Direct without being cold, warm without performing care, specific
@@ -66,7 +65,7 @@ type QuestionStep = {
 
 type InterstitialStep = {
   kind: 'interstitial';
-  id: 'welcome' | 'why_pattern' | 'why_porosity' | 'why_history' | 'we_hear' | 'almost';
+  id: 'why_porosity' | 'we_hear' | 'almost';
   title: string;
   body: string;
   cta?: string;
@@ -85,27 +84,20 @@ type Step = QuestionStep | InterstitialStep | SegmentsStep;
 
 // ─── Quiz steps ──────────────────────────────────────────────────
 const QUIZ_STEPS: Step[] = [
-  // ── BELONGING SCREEN ─────────────────────────────────────────────
-  {
-    kind: 'interstitial',
-    id: 'welcome',
-    title: "Before we start.",
-    body: "We built Tressana for women whose hair has been overlooked, judged, or hard to figure out alone. You\u2019ll see questions about your hair, your scalp, your history, what your hair is doing right now. Answer what you want. Skip what you don\u2019t. Nothing here is graded.",
-    cta: "I\u2019m in",
-  },
-
   {
     kind: 'question',
-    id: 'strand',
-    question: "Pull a single strand from your crown.",
+    id: 'strand_thickness',
+    question: "Pull a single strand from your crown. How does it feel?",
     subtitle: "Crown hair is your truest texture \u2014 the part that hasn\u2019t been styled or stretched.",
     multi: false, showPattern: false,
     proTip: "Clean and dry. Product makes everything lie about itself.",
     helpTitle: 'Why a single strand?',
-    helpBody: "Your whole head can look different depending on styling, products, or how recently you washed. A clean strand from the crown tells the truth. If you\u2019ve had chemical treatments, take a piece closer to the root.",
+    helpBody: "Your whole head can look different depending on styling, products, or how recently you washed. A clean strand from the crown tells the truth. If you\u2019ve had chemical treatments, take a piece closer to the root. Roll it between your fingers \u2014 thickness is about the width of one strand, not how much hair you have.",
     options: [
-      { value: 'ready', label: "Got one", desc: 'Clean, dry, ready to look' },
-      { value: 'skip', label: "I\u2019ll go from memory", desc: "Fine \u2014 we\u2019ll still get close" },
+      { value: 'fine', label: "Barely there", desc: 'Hard to feel between your fingers' },
+      { value: 'medium', label: "You can feel it", desc: 'Like a thread of cotton' },
+      { value: 'coarse', label: "Thick and wiry", desc: 'Distinct, with body to it' },
+      { value: 'unsure', label: "Going from memory", desc: "Fine \u2014 we\u2019ll still get close" },
     ],
   },
   {
@@ -153,12 +145,6 @@ const QUIZ_STEPS: Step[] = [
   },
 
   // ── INTERSTITIAL 1 ───────────────────────────────────────────────
-  {
-    kind: 'interstitial',
-    id: 'why_pattern',
-    title: "It\u2019s structure \u2014 not a score.",
-    body: "1A and 4C aren\u2019t a ranking. They\u2019re different shapes that hold and lose water differently. Pattern is for matching products to your hair, not measuring your hair against anyone else\u2019s.",
-  },
 
   {
     kind: 'question',
@@ -255,12 +241,6 @@ const QUIZ_STEPS: Step[] = [
   },
 
   // ── INTERSTITIAL 3 ───────────────────────────────────────────────
-  {
-    kind: 'interstitial',
-    id: 'why_history',
-    title: "Your history shapes what works.",
-    body: "We don\u2019t ask to flag damage. We ask so what we recommend fits the hair you have now \u2014 not the hair someone else thinks you should have.",
-  },
 
   // ── SEGMENTS ─────────────────────────────────────────────────────
   {
@@ -349,17 +329,15 @@ const SUBTYPES: Record<string, { value: string; label: string; desc: string }[]>
 };
 
 // ─── Phase mapping ───────────────────────────────────────────────
-// Step layout (18 total):
-//   0 welcome
-//   1 strand · 2 curl · 3 subtype · 4 density · 5 why_pattern              → texture
-//   6 porosity · 7 why_porosity · 8 scalp · 9 wash_frequency · 10 length   → scalp
-//   11 history · 12 why_history · 13 segments · 14 we_hear                 → story
-//   15 time_budget · 16 goals · 17 almost                                  → plan
+// Step layout (15 total):
+//   0 strand_thickness · 1 curl · 2 subtype · 3 density                    → texture
+//   4 porosity · 5 why_porosity · 6 scalp · 7 wash_frequency · 8 length    → scalp
+//   9 history · 10 segments · 11 we_hear                                   → story
+//   12 time_budget · 13 goals · 14 almost                                  → plan
 function phaseForStep(idx: number): Phase | null {
-  if (idx === 0) return null;
-  if (idx <= 5) return 'texture';
-  if (idx <= 10) return 'scalp';
-  if (idx <= 14) return 'story';
+  if (idx <= 3) return 'texture';
+  if (idx <= 8) return 'scalp';
+  if (idx <= 11) return 'story';
   return 'plan';
 }
 
@@ -370,21 +348,18 @@ function completedBefore(phase: Phase | null): Phase[] {
   return PHASE_ORDER.slice(0, PHASE_ORDER.indexOf(phase));
 }
 
-// 1-based interstitial index for display (00 / 04 for welcome, 01 / 04 onward for the rest)
+// 1-based interstitial index for display.
 function interstitialDisplay(stepId: string): string | null {
   const order: Record<string, string> = {
-    welcome:     '00 / 04',
-    why_pattern: '01 / 04',
-    why_porosity:'02 / 04',
-    why_history: '03 / 04',
+    why_porosity:'01 / 02',
     we_hear:     '\u2014',       // breath beat — no index, just an em-dash
-    almost:      '04 / 04',
+    almost:      '02 / 02',
   };
   return order[stepId] ?? null;
 }
 
 // ─── Component ───────────────────────────────────────────────────
-const PROGRESS_KEY = 'tressana_quiz_progress';
+const PROGRESS_KEY = 'tressie_quiz_progress';
 
 export default function QuizScreen() {
   const router = useRouter();
@@ -417,7 +392,7 @@ export default function QuizScreen() {
   }, []);
 
   // Persist progress on every step or answer change, after initial load.
-  // Skip persisting the welcome screen — no reason to "resume" on idx 0.
+  // Skip persisting an untouched first step — nothing to resume.
   useEffect(() => {
     if (!progressLoaded) return;
     if (idx === 0 && Object.keys(answers).length === 0) return;
@@ -510,6 +485,7 @@ export default function QuizScreen() {
     const quizResults = {
       hairType,
       curl: answers.curl,
+      strand_thickness: answers.strand_thickness || 'unsure',
       subtype: answers.subtype,
       density: answers.density || 'unsure',
       porosity: answers.porosity || 'unsure',
@@ -521,7 +497,7 @@ export default function QuizScreen() {
       segments,
       time_budget: answers.time_budget || 'short',
     };
-    await AsyncStorage.setItem('tressana_quiz', JSON.stringify(quizResults));
+    await AsyncStorage.setItem('tressie_quiz', JSON.stringify(quizResults));
 
     // Clear in-progress save now that we have a completed result.
     await AsyncStorage.removeItem(PROGRESS_KEY).catch(() => {});
@@ -611,9 +587,8 @@ export default function QuizScreen() {
             <Text style={$.intTitle}>{step.title}</Text>
             <Text style={$.intBody}>{step.body}</Text>
 
-            {step.id === 'why_pattern'  && <PatternLineup selectedType={(answers.subtype as string) || ''} />}
             {step.id === 'why_porosity' && <CuticleStrands />}
-            {/* welcome, why_history, we_hear, almost: deliberately no visual */}
+            {/* we_hear, almost: deliberately no visual */}
           </Animated.View>
         ) : step.kind === 'segments' ? (
           <Animated.View key={`seg-${idx}`} entering={FadeIn.duration(280)}>

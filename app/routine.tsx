@@ -125,7 +125,7 @@ export default function RoutineScreen() {
 
   useEffect(() => {
     (async () => {
-      const quizRaw = await AsyncStorage.getItem('tressana_quiz');
+      const quizRaw = await AsyncStorage.getItem('tressie_quiz');
       const data = quizRaw ? JSON.parse(quizRaw) : null;
       setQuizData(data);
 
@@ -133,7 +133,7 @@ export default function RoutineScreen() {
       const segments = data?.segments || ['natural'];
 
       // Read local checks first so the server seed below is authoritative.
-      const checksRaw = await AsyncStorage.getItem('tressana_checks');
+      const checksRaw = await AsyncStorage.getItem('tressie_checks');
       if (checksRaw) {
         try { setChecks(JSON.parse(checksRaw)); } catch {}
       }
@@ -180,7 +180,7 @@ export default function RoutineScreen() {
     dayChecks[stepId] = !wasDone;
     const updated = { ...checks, [day]: dayChecks };
     setChecks(updated);
-    await AsyncStorage.setItem('tressana_checks', JSON.stringify(updated)).catch(() => {});
+    await AsyncStorage.setItem('tressie_checks', JSON.stringify(updated)).catch(() => {});
 
     // Persist to Supabase. markStepComplete also awards XP on insert.
     // routine_id comes from the step itself (carried through from

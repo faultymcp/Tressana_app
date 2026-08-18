@@ -1,14 +1,14 @@
-# Tressana — Brand & Design System
+# Tressie — Brand & Design System
 
 *Last revised: working document. Update as decisions are made.*
 
-This document is the single source of truth for how Tressana looks, sounds, and behaves. Before designing or building any new screen, read the relevant section. Before shipping any change, check it against the rules here. The codebase's `constants/theme.ts` and `constants/voice.ts` are the runtime expressions of this document — they must always stay in sync with it.
+This document is the single source of truth for how Tressie looks, sounds, and behaves. Before designing or building any new screen, read the relevant section. Before shipping any change, check it against the rules here. The codebase's `constants/theme.ts` and `constants/voice.ts` are the runtime expressions of this document — they must always stay in sync with it.
 
 ---
 
 ## 1. The promise
 
-Tressana exists for women whose hair has been overlooked by mainstream advice — across every texture from straight to coily, every life stage, every history. Where the haircare industry sells transformation, Tressana offers recognition: we read your hair back to you, and we build the routine that fits *who you are right now*, not who a category says you should be.
+Tressie exists for women whose hair has been overlooked by mainstream advice — across every texture from straight to coily, every life stage, every history. Where the haircare industry sells transformation, Tressie offers recognition: we read your hair back to you, and we build the routine that fits *who you are right now*, not who a category says you should be.
 
 The product feels like a thoughtful stylist who has seen everything. Not a beauty brand. Not a coach. Not a clinic. A trusted, specific, calm presence.
 
@@ -101,7 +101,7 @@ Label    → Sora 500 Medium        10–11pt  →  CAPS LABELS, letterspaced 2�
 
 ## 5. Photography rules
 
-### What Tressana photos look like
+### What Tressie photos look like
 
 - **Real hair, real textures.** Wet hair, dry hair, hands in hair, water in hair, scalp, ends, fingers detangling, braiding, refreshing.
 - **All textures.** From bone-straight 1A through tight-coil 4C. Across ethnicities.
@@ -109,7 +109,7 @@ Label    → Sora 500 Medium        10–11pt  →  CAPS LABELS, letterspaced 2�
 - **Close, intimate framing.** Crops that feel observed, not staged.
 - **Natural light or considered editorial light.** No flat e-commerce lighting.
 
-### What Tressana photos do not look like
+### What Tressie photos do not look like
 
 - Stock smiles to camera
 - Hair flips, "look-at-me-go" energy
@@ -282,7 +282,7 @@ Before any screen ships, walk this:
 - [ ] **Spacing:** 4-point grid throughout. No 17pt or 22pt.
 - [ ] **Motion:** Entrance animations only, `Easing.out(Easing.cubic)`, no springs except button press.
 - [ ] **Haptics:** Every meaningful tap has feedback.
-- [ ] **Voice:** Reads aloud as the Tressana voice would speak. No wellness-speak, no urgency, no AI-balanced rhetoric.
+- [ ] **Voice:** Reads aloud as the Tressie voice would speak. No wellness-speak, no urgency, no AI-balanced rhetoric.
 - [ ] **One job:** The screen does one thing well, not six things passably.
 
 ---

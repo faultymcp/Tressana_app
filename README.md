@@ -1,10 +1,10 @@
-# Tressana Mobile - React Native (Expo)
+# Tressie Mobile - React Native (Expo)
 
 ## Setup
 
 1. **Install dependencies:**
 ```bash
-cd tressana-mobile
+cd tressie-mobile
 npm install
 ```
 
@@ -27,7 +27,7 @@ npx expo start
 ## Project Structure
 
 ```
-tressana-mobile/
+tressie-mobile/
 ├── app/                    # Screens (file-based routing)
 │   ├── _layout.tsx         # Root layout (navigation stack)
 │   ├── index.tsx           # Splash screen

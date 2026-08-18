@@ -1,12 +1,12 @@
 {
   "expo": {
-    "name": "Tressana",
-    "slug": "tressana",
+    "name": "Tressie",
+    "slug": "tressie",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "scheme": "tressana",
+    "scheme": "tressie",
     "splash": {
       "backgroundColor": "#0c0a15"
     },
@@ -15,14 +15,14 @@
     ],
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "ai.tressana.app",
+      "bundleIdentifier": "com.tressie.app",
       "buildNumber": "1"
     },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#0c0a15"
       },
-      "package": "ai.tressana.app"
+      "package": "com.tressie.app"
     },
     "plugins": [
       "expo-router",

@@ -82,7 +82,7 @@ export default function AuthScreen() {
 
         // Bootstrap routine from quiz goals/segments if not already present.
         if (userId && !isReturning) {
-          const raw = await AsyncStorage.getItem('tressana_user');
+          const raw = await AsyncStorage.getItem('tressie_user');
           const quiz = raw ? JSON.parse(raw) : {};
           const goals = quiz?.goals || [];
           const segs = quiz?.segments || ['natural'];
@@ -166,7 +166,7 @@ export default function AuthScreen() {
         >
           <View style={styles.headerContent}>
             <Text style={styles.brand}>
-              Tressana<Text style={styles.brandDot}>.ai</Text>
+              Tressie
             </Text>
           </View>
         </LinearGradient>
@@ -262,7 +262,7 @@ export default function AuthScreen() {
       >
         <View style={styles.headerContent}>
           <Text style={styles.brand}>
-            Tressana<Text style={styles.brandDot}>.ai</Text>
+            Tressie
           </Text>
           <Text style={styles.tagline}>FOR EVERY CURL, COIL AND WAVE</Text>
         </View>
@@ -345,7 +345,6 @@ const styles = StyleSheet.create({
   },
   headerContent: { alignItems: 'center' },
   brand: { fontFamily: Fonts.heading, fontSize: 28, color: Colors.white, letterSpacing: -0.5 },
-  brandDot: { color: Colors.pink },
   tagline: {
     fontFamily: Fonts.heading, fontSize: 9, color: Colors.lime,
     letterSpacing: 3, marginTop: 8, textTransform: 'uppercase',

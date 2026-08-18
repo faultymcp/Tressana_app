@@ -39,10 +39,10 @@ import { supabase } from '@/lib/supabase';
 // ── Legal URLs ───────────────────────────────────────────────────
 // TODO: Replace with real URLs once Privacy Policy and Terms of Service
 // are drafted and hosted. Until then these point to placeholder paths
-// on the Tressana domain so the links are real but obviously pending.
+// on the Tressie domain so the links are real but obviously pending.
 // Do NOT ship to public release with these placeholder URLs unresolved.
-const TERMS_URL = 'https://tressana.ai/terms';
-const PRIVACY_URL = 'https://tressana.ai/privacy';
+const TERMS_URL = 'https://tressie.ai/terms';
+const PRIVACY_URL = 'https://tressie.ai/privacy';
 
 // ── Validation ───────────────────────────────────────────────────
 // Permissive but real. Catches typos like missing @ or trailing space,
@@ -80,14 +80,14 @@ export default function NameCaptureScreen() {
         email: trimmedEmail,
         capturedAt: new Date().toISOString(),
       };
-      await AsyncStorage.setItem('tressana_user', JSON.stringify(userRecord));
+      await AsyncStorage.setItem('tressie_user', JSON.stringify(userRecord));
 
       // Best-effort: write to pending_users in Supabase. Non-blocking on
       // failure — the user shouldn't be stranded if the network is bad.
       try {
         // Pull quiz data so it travels with the user record. Useful both
         // for the eventual claim-account flow and for early analytics.
-        const quizRaw = await AsyncStorage.getItem('tressana_quiz');
+        const quizRaw = await AsyncStorage.getItem('tressie_quiz');
         const quizData = quizRaw ? JSON.parse(quizRaw) : null;
 
         await supabase.from('pending_users').upsert(

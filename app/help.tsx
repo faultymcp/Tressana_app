@@ -17,13 +17,13 @@ const IC = {
 };
 
 const FAQS = [
-  { q: 'How does the hair quiz work?', a: 'The quiz asks about your hair type, porosity, scalp condition, goals, and current hair setup (natural, braids, extensions, etc.). Based on your answers, Tressana builds a personalised routine with daily and weekly steps specific to your hair.' },
-  { q: 'What hair types does Tressana support?', a: 'Every hair type from 1A to 4C, plus braids, sewn-in extensions, clip-ins, wigs, locs, relaxed hair, colour-treated hair, heat-styled hair, and hair transplant recovery. Your routine adapts to your specific situation.' },
+  { q: 'How does the hair quiz work?', a: 'The quiz asks about your hair type, porosity, scalp condition, goals, and current hair setup (natural, braids, extensions, etc.). Based on your answers, Tressie builds a personalised routine with daily and weekly steps specific to your hair.' },
+  { q: 'What hair types does Tressie support?', a: 'Every hair type from 1A to 4C, plus braids, sewn-in extensions, clip-ins, wigs, locs, relaxed hair, colour-treated hair, heat-styled hair, and hair transplant recovery. Your routine adapts to your specific situation.' },
   { q: 'How does XP work?', a: 'You earn XP by completing routine steps, using the app daily, trying the AI hair try-on, rating products, and referring friends. XP can be redeemed for appointment discounts and try-on credits.' },
   { q: 'What is the AI Hair Try-On?', a: 'Upload a selfie and a reference photo of any hairstyle. Our AI generates a 4K image showing how that style would look on you. Pro subscribers get 5 try-ons per month, Pro+ gets 15. Extra try-ons can be purchased via your wallet.' },
   { q: 'How do I cancel my subscription?', a: 'Go to Profile, then Subscription, then tap Cancel subscription at the bottom. You will retain access until the end of your current billing period.' },
   { q: 'Is my data safe?', a: 'Yes. Your data is stored securely on Supabase (EU-hosted). We never sell your personal information. You can export or delete all your data from Settings at any time.' },
-  { q: 'How do salon bookings work?', a: 'Browse verified salons in the Salons tab, filtered by your hair type. Book directly through the app. You can apply XP discount codes at checkout. Tressana takes a small commission from the salon, not from you.' },
+  { q: 'How do salon bookings work?', a: 'Browse verified salons in the Salons tab, filtered by your hair type. Book directly through the app. You can apply XP discount codes at checkout. Tressie takes a small commission from the salon, not from you.' },
   { q: 'I have braids — will the routine work for me?', a: 'Absolutely. When you select braids in the quiz, your routine includes braid-specific steps like scalp cleansing between braids, edge care, lightweight oil application, and removal timing reminders. The advice adapts to whether you have box braids, cornrows, or knotless braids.' },
 ];
 
@@ -43,27 +43,27 @@ export default function HelpScreen() {
         {/* Contact options */}
         <Text style={st.sectionLabel}>Get in touch</Text>
         <View style={st.contactCard}>
-          <Pressable onPress={() => Linking.openURL('mailto:hello@tressana.ai')} style={st.contactRow}>
+          <Pressable onPress={() => Linking.openURL('mailto:hello@tressie.ai')} style={st.contactRow}>
             <View style={st.contactIcon}><IC.Mail /></View>
             <View style={st.contactBody}>
               <Text style={st.contactTitle}>Email us</Text>
-              <Text style={st.contactSub}>hello@tressana.ai</Text>
+              <Text style={st.contactSub}>hello@tressie.ai</Text>
             </View>
           </Pressable>
           <View style={st.contactDivider} />
-          <Pressable onPress={() => Linking.openURL('https://tressana.ai')} style={st.contactRow}>
+          <Pressable onPress={() => Linking.openURL('https://tressie.ai')} style={st.contactRow}>
             <View style={st.contactIcon}><IC.Globe /></View>
             <View style={st.contactBody}>
               <Text style={st.contactTitle}>Visit our website</Text>
-              <Text style={st.contactSub}>tressana.ai</Text>
+              <Text style={st.contactSub}>tressie.ai</Text>
             </View>
           </Pressable>
           <View style={st.contactDivider} />
-          <Pressable onPress={() => Linking.openURL('https://instagram.com/tressana.ai')} style={st.contactRow}>
+          <Pressable onPress={() => Linking.openURL('https://instagram.com/tressie.ai')} style={st.contactRow}>
             <View style={st.contactIcon}><IC.MessageCircle /></View>
             <View style={st.contactBody}>
               <Text style={st.contactTitle}>Message us on Instagram</Text>
-              <Text style={st.contactSub}>@tressana.ai</Text>
+              <Text style={st.contactSub}>@tressie.ai</Text>
             </View>
           </Pressable>
         </View>

@@ -12,15 +12,16 @@ import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Colors, Fonts, Radius } from '@/constants/theme';
+import { supabase } from '@/lib/supabase';
 import Animated, { FadeInUp, FadeInLeft, FadeInRight } from 'react-native-reanimated';
 
-// ── Groq API ─────────────────
-const GROQ_KEY = process.env.EXPO_PUBLIC_GROQ_KEY || '';
-const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
+// ── Mistral, via the mistral-proxy Edge Function ─────────────────
+// The API key lives in Supabase secrets, never in the app bundle.
+const CHAT_URL = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/mistral-proxy`;
 const OPEN_FOOD_FACTS_URL = 'https://world.openfoodfacts.org/api/v0/product';
 
 // ── Tressie System Prompt ─────────────────────────────────────────
-const SYSTEM_PROMPT = `You are Tressie, the AI hair advisor exclusively inside the Tressana app. You ONLY talk about hair. Nothing else.
+const SYSTEM_PROMPT = `You are Tressie, the AI hair advisor exclusively inside the Tressie app. You ONLY talk about hair. Nothing else.
 
 YOUR PERSONALITY — older sister energy:
 - Talk like a real person, not a customer service bot. Casual, warm, direct.
@@ -59,20 +60,20 @@ INGREDIENT ANALYSIS — when given ingredients:
 - Humectants (glycerin, aloe): great for moisture, avoid in dry climates
 - Give clear verdict: ✅ Good / ⚠️ Use with caution / 🚫 Avoid — with specific reasons
 
-TRESSANA PRODUCTS (recommend ONLY these):
-• Tressana Hydrating Hair Mask — dry hair, Types 3A-4C
-• Tressana Soothing Scalp Serum — sensitive scalp, all types
-• Tressana Curl Defining Cream — curl definition, Types 3A-4A
-• Tressana Deep Moisture Butter — extreme dryness, Types 4A-4C
-• Tressana Pre-Poo Detangling Oil — pre-wash protection, Types 3C-4C
-• Tressana Co-Wash Cleansing Conditioner — gentle cleansing, Types 3B-4C
+TRESSIE PRODUCTS (recommend ONLY these):
+• Tressie Hydrating Hair Mask — dry hair, Types 3A-4C
+• Tressie Soothing Scalp Serum — sensitive scalp, all types
+• Tressie Curl Defining Cream — curl definition, Types 3A-4A
+• Tressie Deep Moisture Butter — extreme dryness, Types 4A-4C
+• Tressie Pre-Poo Detangling Oil — pre-wash protection, Types 3C-4C
+• Tressie Co-Wash Cleansing Conditioner — gentle cleansing, Types 3B-4C
 
 RULES:
 - ONLY talk about hair. Redirect everything else: "That's outside my lane babe — I'm strictly a hair girl 💜"
 - Never shame any texture, porosity, or practice.
 - Short answers unless a full routine is requested.
 
-The Tressana app has: Wash Day Tracker, Stylist Marketplace, AI Hair Analysis.`;
+The Tressie app has: Wash Day Tracker, Stylist Marketplace, AI Hair Analysis.`;
 
 // ── Personalised chips by hair type ──────────────────────────────
 const CHIPS_BY_TYPE: Record<string, { label: string; emoji: string }[]> = {
@@ -97,7 +98,7 @@ function getSuggestions(hairType: string) {
 
 // ── Types ─────────────────────────────────────────────────────────
 type Message = { id: string; role: 'user' | 'assistant'; text: string; attachment?: { type: 'image' | 'document'; name: string } };
-type GroqMessage = { role: 'user' | 'assistant' | 'system'; content: string };
+type ChatMessage = { role: 'user' | 'assistant' | 'system'; content: string };
 
 // ── Icons ─────────────────────────────────────────────────────────
 function IconSend() {
@@ -283,9 +284,9 @@ function AttachMenu({ onIngredientScan, onBarcodeScan, onDocument }: { onIngredi
 export default function AIChatScreen() {
   const [messages, setMessages] = useState<Message[]>([{
     id: 'welcome', role: 'assistant',
-    text: "Heyy! 👋 I'm **Tressie**, your hair assistant inside Tressana.\n\nReal talk — I've done the research, tried the products, and made the mistakes so you don't have to. I got you.\n\nSo what's going on with your hair? 👀",
+    text: "Heyy! 👋 I'm **Tressie**, your hair assistant inside Tressie.\n\nReal talk — I've done the research, tried the products, and made the mistakes so you don't have to. I got you.\n\nSo what's going on with your hair? 👀",
   }]);
-  const [history, setHistory] = useState<GroqMessage[]>([]);
+  const [history, setHistory] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -296,7 +297,7 @@ export default function AIChatScreen() {
   const listRef = useRef<FlatList>(null);
 
   useEffect(() => {
-    AsyncStorage.getItem('tressana_quiz').then(raw => {
+    AsyncStorage.getItem('tressie_quiz').then(raw => {
       if (raw) setHairType(JSON.parse(raw).hairType || '');
     });
   }, []);
@@ -320,27 +321,30 @@ export default function AIChatScreen() {
     scrollToBottom();
 
     const contextualMsg = hairType ? `[My hair type is ${hairType}] ${trimmed}` : trimmed;
-    const newHistory: GroqMessage[] = [...history, { role: 'user', content: contextualMsg }];
+    const newHistory: ChatMessage[] = [...history, { role: 'user', content: contextualMsg }];
 
     try {
-      const response = await fetch(GROQ_URL, {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Please sign in to chat.');
+
+      const response = await fetch(CHAT_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${GROQ_KEY}` },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
         body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile',
-          messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...newHistory],
-          max_tokens: 600,
-          temperature: 0.85,
+          system: SYSTEM_PROMPT,
+          messages: newHistory.slice(-10),
         }),
       });
 
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData?.error?.message || `Error ${response.status}`);
-      }
+      if (response.status === 429) throw new Error('Give me a few seconds, then ask again.');
+      if (!response.ok) throw new Error('I had trouble with that one. Try again?');
 
       const data = await response.json();
-      const replyText = data?.choices?.[0]?.message?.content || "Hmm something went weird, try again!";
+      const replyText = data?.reply;
+      if (!replyText) throw new Error('I had trouble with that one. Try again?');
 
       setMessages(prev => [...prev, { id: `a_${Date.now()}`, role: 'assistant', text: replyText }]);
       setHistory([...newHistory, { role: 'assistant', content: replyText }]);

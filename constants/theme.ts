@@ -1,4 +1,4 @@
-// Tressana Visual Identity — colours, typography, spacing
+// Tressie Visual Identity — colours, typography, spacing
 // "Warm, modern, magical — never clinical"
 //
 // Day 2 expansion: semantic tokens added below the brand palette so

@@ -33,7 +33,7 @@ export default function NameScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     try {
       await AsyncStorage.setItem(
-        'tressana_user',
+        'tressie_user',
         JSON.stringify({
           firstName: trimmed,
           capturedAt: new Date().toISOString(),

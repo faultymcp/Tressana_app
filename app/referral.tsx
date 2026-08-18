@@ -70,7 +70,7 @@ export default function ReferralScreen() {
 
   const handleShare = async () => {
     await Share.share({
-      message: `Hey! Join me on Tressana, the AI hair care app that actually gets your hair type. Use my code ${code} and we both get £5 off our first appointment + 200 XP. Download: https://tressana.ai/invite/${code}`,
+      message: `Hey! Join me on Tressie, the AI hair care app that actually gets your hair type. Use my code ${code} and we both get £5 off our first appointment + 200 XP. Download: https://tressie.ai/invite/${code}`,
     });
   };
 
